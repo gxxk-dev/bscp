@@ -334,8 +334,13 @@ function Chrome(props: {
   switch (screen) {
     case "empty":
       items.push(
-        <label key="drop" className="cursor-pointer px-3 text-sm text-neutral-500
-          hover:text-neutral-900 dark:hover:text-white">
+        /* 这两个 label 都包着一个 sr-only 的 file input：它照样能被 Tab
+           选中，所以焦点落在它身上时必须有可见的环，否则键盘用户走到
+           这一格什么也看不出来。 */
+        <label key="drop" className="shrink-0 cursor-pointer rounded-(--radius) px-3 py-2
+          text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-white
+          has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2
+          has-[:focus-visible]:outline-emerald-600">
           把图片或 PDF 拖到画面任意位置（可多选），或点这里选
           <input type="file" multiple accept="image/*,application/pdf" className="sr-only"
             onChange={(e) => void onPick(e.target.files)} />
@@ -347,16 +352,18 @@ function Chrome(props: {
     case "ready":
       items.push(
         <TextButton key="parse" variant="primary" onClick={() => onDemo("解析")}>解析</TextButton>,
-        <label key="swap" className="cursor-pointer rounded-(--radius) px-3 py-1.5
+        <label key="swap" className="shrink-0 cursor-pointer rounded-(--radius) px-3 py-2
           text-sm font-medium text-neutral-600 ring-1 ring-transparent
-          hover:bg-neutral-950/5 dark:text-neutral-300 dark:hover:bg-white/10">
+          hover:bg-neutral-950/5 dark:text-neutral-300 dark:hover:bg-white/10
+          has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2
+          has-[:focus-visible]:outline-emerald-600">
           换个文件
           <input type="file" multiple accept="image/*,application/pdf" className="sr-only"
             onChange={(e) => void onPick(e.target.files)} />
         </label>);
       break;
     case "parsing":
-      items.push(<p key="busy" className="px-3 text-sm text-neutral-500">解析中…</p>);
+      items.push(<p key="busy" className="shrink-0 px-3 py-2 text-sm text-neutral-500">解析中…</p>);
       break;
     case "pending":
       items.push(btn("all", "全部接受", "primary"), btn("each", "逐个查看"));
@@ -376,14 +383,14 @@ function Chrome(props: {
       items.push(btn("gsplit", "拆开分组"), btn("gmerge", "合并分组"));
       break;
     case "moved-one": case "moved-group": case "arranged": case "operating":
-      items.push(<IconButton key="undo" label="撤销" onClick={() => onDemo("撤销")}
+      items.push(<IconButton key="undo" label="撤销" size="md" onClick={() => onDemo("撤销")}
         glyph={<Glyph icon={Icons.undo} />} />);
       break;
   }
 
   if (["scattered", "grouped", "operating", "moved-one", "moved-group", "arranged",
        "split", "split-rows"].includes(screen)) {
-    items.push(<IconButton key="fit" label="适应画布" onClick={onFit}
+    items.push(<IconButton key="fit" label="适应画布" size="md" onClick={onFit}
       glyph={<Glyph icon={Icons.fit} />} />);
   }
 
@@ -399,19 +406,23 @@ function Chrome(props: {
     items.push(sep,
       <TextButton key="cast" variant={castMain ? "primary" : "secondary"} onClick={onCast}>投屏</TextButton>,
       sep,
-      <IconButton key="rerun" label="重跑解析" onClick={onRerun}
+      <IconButton key="rerun" label="重跑解析" size="md" onClick={onRerun}
         glyph={<Glyph icon={Icons.redo}
           className="fill-red-600 dark:fill-red-400 group-hover:fill-red-600" />} />,
     );
   }
 
   return (
+    /* 间距只有这一层 gap。早先这里套了内外两层 flex，外层的 gap-x-2 作用
+       在「唯一那个内层 wrapper」上——零对间距，等于没写；真正生效的是
+       内层的 gap-x-0.5（2px）。一条 2px 间距的工具条，控件全糊在一起，
+       分隔线两侧也是 2px，看着像「按钮没做完」。 */
     <div id="chrome" className="fixed bottom-3.5 left-1/2 z-40 -translate-x-1/2">
-      <div className="flex max-w-[min(96dvw,44rem)] items-center gap-x-2 overflow-x-auto
+      <div className="flex max-w-[min(96dvw,44rem)] items-center gap-x-3 overflow-x-auto
         rounded-(--radius) bg-white/90 p-(--padding) shadow-sm ring-1 ring-neutral-950/10
         backdrop-blur-sm dark:bg-neutral-900/90 dark:shadow-none dark:ring-white/10
-        [--radius:var(--radius-xl)] [--padding:--spacing(1.5)]">
-        <div className="flex shrink-0 items-center gap-x-0.5">{items}</div>
+        [--radius:var(--radius-xl)] [--padding:--spacing(2)]">
+        {items}
       </div>
     </div>
   );

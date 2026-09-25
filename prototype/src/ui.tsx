@@ -39,12 +39,15 @@ export function TextButton(props: {
   title?: string;
 }) {
   const { children, onClick, variant = "secondary", title } = props;
+  /* buttons.md：横内边距从紧（px-3 py-2，不是 px-4 py-2），应用型界面
+     总高 28–38px。py-2 + text-sm 的 20px 行高 = 36px，和 md 档图标按钮
+     同高——工具条里三种高度并排，看着就不像一条线。 */
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className={`inline-flex shrink-0 items-center gap-x-1.5 rounded-(--radius) px-3 py-1.5
+      className={`inline-flex shrink-0 items-center gap-x-1.5 rounded-(--radius) px-3 py-2
         text-sm font-medium whitespace-nowrap ${VARIANT[variant]} ${FOCUS}`}
     >
       {children}
@@ -52,8 +55,14 @@ export function TextButton(props: {
   );
 }
 
-/* 两种按钮尺寸：28 / 36，差 8px ≥ 6px。48×48 命中区由 hit-expand 补足，
-   且只在粗指针设备上生效（pointer-fine:hidden），鼠标用户不吃它。 */
+/* 全应用只有这两种尺寸：28 / 36，差 8px ≥ 6px。sm 给顶部评审脚手架，
+   md 给底部工具条。48×48 命中区由 hit-expand 补足，且只在粗指针设备上
+   生效（pointer-fine:hidden），鼠标用户不吃它——所以它不撑开布局，
+   也就不会把工具条顶宽。
+
+   代价是相邻按钮的中心距必须 ≥48px 才不互相压命中区：36px 按钮配
+   12px 间距正好 48。间距调到 8px 以下，触控上就会出现「这一格归左边
+   那颗按钮」的盲区，而操作者只看得见两颗按钮的分界。 */
 export function IconButton(props: {
   glyph: ReactNode;
   label: string;
