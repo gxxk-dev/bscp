@@ -1,8 +1,12 @@
 ---
-status: accepted
+status: superseded by ADR-0008
 ---
 
 # DOCX 走 OOXML 直解，PDF 走文字层：两条输入路径，都不渲染
+
+> 本 ADR 已被 [ADR-0008](./0008-image-only-rasterize-first.md) 推翻——两条路径都取消了，
+> 资源一律先栅格化。原文保留以备追溯；其中「栅格化是渲染的产物而非其替代」这一判断
+> 仍然是本 ADR 的遗产，它正是 0008 要面对的成本。
 
 DOCX 与 PDF 各走一条读取路径，但**两条都不需要渲染引擎**：
 
