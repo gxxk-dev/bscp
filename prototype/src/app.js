@@ -35,22 +35,22 @@ const ORDER = ["A", "B", "C"];
 /* ---------- 示例内容 ----------
    标题与选项用真字；正文用灰条代表原始资料的裁切位图。 */
 const REGIONS = [
-  { id: "q1", kind: "题", x: 0, y: 0, w: 460, h: 250,
+  { id: "q1", x: 0, y: 0, w: 460, h: 250,
     title: "1. 下列说法正确的是（　）",
     opts: ["A. 物体速度为零时加速度一定为零",
            "B. 加速度减小时速度一定减小",
            "C. 速度变化越快加速度越大",
            "D. 加速度方向与速度方向总是相同"] },
-  { id: "q2", kind: "题", x: 500, y: 0, w: 460, h: 250,
+  { id: "q2", x: 500, y: 0, w: 460, h: 250,
     title: "2. 如图所示，物块沿斜面下滑（　）",
     bars: ["w-[90%]", "w-[75%]", "w-[60%]"] },
-  { id: "fig", kind: "图", x: 1000, y: 0, w: 300, h: 250, figure: true },
-  { id: "q3", kind: "题", x: 0, y: 300, w: 700, h: 220,
+  { id: "fig", x: 1000, y: 0, w: 300, h: 250, figure: true },
+  { id: "q3", x: 0, y: 300, w: 700, h: 220,
     title: "3. 计算题：求物块在 3s 内通过的位移",
     bars: ["w-[90%]", "w-[75%]", "w-[60%]", "w-[45%]"] },
-  { id: "ans", kind: "答", x: 750, y: 300, w: 550, h: 220,
+  { id: "ans", x: 750, y: 300, w: 550, h: 220,
     title: "参考答案", opts: ["1. C　　2. B　　3. 4.5 m"] },
-  { id: "note", kind: "说明", x: 0, y: 570, w: 400, h: 150,
+  { id: "note", x: 0, y: 570, w: 400, h: 150,
     title: "本卷说明", bars: ["w-[90%]", "w-[75%]"] },
 ];
 
@@ -103,11 +103,8 @@ function regionMarkup(r) {
   return `<div data-id="${r.id}" class="region absolute left-(--x) top-(--y) w-(--w) h-(--h)
     rounded-(--radius) bg-white shadow-xs ring-1 ring-neutral-950/10
     dark:bg-neutral-900 dark:shadow-none dark:inset-ring dark:inset-ring-white/5">
-    <div class="relative overflow-hidden rounded-(--radius)">
-      <span class="absolute top-0 left-0 rounded-br-md bg-neutral-950/5 px-1.5 py-0.5
-        text-xs font-medium text-neutral-600
-        dark:bg-white/10 dark:text-neutral-300">${r.kind}</span>
-      <div class="p-3 pt-7 ${r.figure ? "h-full" : ""}">${body}</div>
+    <div class="relative h-full overflow-hidden rounded-(--radius)">
+      <div class="h-full p-3">${body}</div>
     </div>${handles}</div>`;
 }
 
