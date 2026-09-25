@@ -5,9 +5,9 @@
    底部那条和绿色提示条是设计对象：投屏时必须一次消失干净。
    每一屏都能用 URL 直接定位：?path=<key>&step=<从 0 起>。 */
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import { Canvas } from "./Canvas";
-import { movedCount } from "./model";
+import { acceptFile, boardForFile, movedCount, readyScene, rejectionHint } from "./model";
 import type { Board, Scene } from "./model";
 import { PATHS, PATH_KEYS } from "./paths";
 import { Glyph, IconButton, Icons, TextButton } from "./ui";
@@ -66,6 +66,35 @@ export default function App() {
   const demo = (what: string) =>
     setScene((s) => ({ ...s, toast: `演示里这一步的落点：${what}。底下不接真实数据。` }));
 
+  /* ---------- 投放 ----------
+     整屏都是投放区（spec：入口「常驻但不显眼」，1 步完成）。所以监听挂在
+     根容器上而不是某个小框——拖到屏幕任何角落都算。 */
+  const [over, setOver] = useState(false);
+
+  const ingest = useCallback((files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const verdict = acceptFile(file);
+    if (!verdict.ok) {
+      setScene((s) => ({
+        ...s,
+        screen: "rejected",
+        /* 被拒的文件不变成任何东西：画布保持原样，不摆一份
+           「假如收下了会长什么样」的预览，那会让人以为已经投进去了。 */
+        board: s.board,
+        toast: rejectionHint(verdict.reason),
+      }));
+      return;
+    }
+    setScene(readyScene(boardForFile(verdict), file));
+  }, []);
+
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setOver(false);
+    ingest(e.dataTransfer.files);
+  };
+
   const rerun = () =>
     setScene((s) => {
       const n = movedCount(s.board);
@@ -95,8 +124,14 @@ export default function App() {
                      "scattered", "one-block-full"].includes(scene.screen);
 
   return (
-    <div className="isolate fixed inset-0 overflow-hidden bg-neutral-100 text-neutral-900
-                    dark:bg-neutral-950 dark:text-neutral-100">
+    <div
+      id="app"
+      className="isolate fixed inset-0 overflow-hidden bg-neutral-100 text-neutral-900
+                 dark:bg-neutral-950 dark:text-neutral-100"
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false); }}
+      onDrop={onDrop}
+    >
       <Canvas
         board={scene.board}
         zoom={scene.zoom}
@@ -106,6 +141,20 @@ export default function App() {
         onBoard={patchBoard}
         onSelect={(id) => patchBoard({ ...scene.board, selected: id })}
       />
+
+      {over && (
+        /* 拖到哪都能放，所以提示也要铺满整屏——一个居中的小框会让人
+           以为只有那一小块能接 */
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center
+                        bg-emerald-600/10 ring-4 ring-inset ring-emerald-600/60
+                        backdrop-blur-[1px]">
+          <p className="rounded-(--radius) bg-white px-4 py-2 text-sm font-medium shadow-sm
+                        ring-1 ring-neutral-950/10 dark:bg-neutral-900 dark:ring-white/10
+                        [--radius:var(--radius-xl)]">
+            松手就投放 · 收图片和 PDF
+          </p>
+        </div>
+      )}
 
       <Topbar where={where} go={go} casting={casting} hint={step.hint} />
 
@@ -124,6 +173,7 @@ export default function App() {
           onFit={() => setFitNonce((n) => n + 1)}
           onRerun={rerun}
           onDemo={demo}
+          onPick={ingest}
         />
       )}
 
@@ -235,8 +285,9 @@ function Chrome(props: {
   onFit: () => void;
   onRerun: () => void;
   onDemo: (what: string) => void;
+  onPick: (files: FileList | null) => void;
 }) {
-  const { screen, castMain, onCast, onFit, onRerun, onDemo } = props;
+  const { screen, castMain, onCast, onFit, onRerun, onDemo, onPick } = props;
   const items: ReactNode[] = [];
   const btn = (key: string, label: string, variant?: "primary" | "ghost") =>
     <TextButton key={key} variant={variant} onClick={() => onDemo(label)}>{label}</TextButton>;
@@ -245,14 +296,27 @@ function Chrome(props: {
      分支各塞一个 primary，然后评审者点错的那个就没了。 */
   switch (screen) {
     case "empty":
-      items.push(<p key="drop" className="px-3 text-sm text-neutral-500">
-        把图片或 PDF 拖到画面任意位置</p>);
+      items.push(
+        <label key="drop" className="cursor-pointer px-3 text-sm text-neutral-500
+          hover:text-neutral-900 dark:hover:text-white">
+          把图片或 PDF 拖到画面任意位置，或点这里选
+          <input type="file" accept="image/*,application/pdf" className="sr-only"
+            onChange={(e) => onPick(e.target.files)} />
+        </label>);
       break;
     case "rejected":
       items.push(btn("pdf", "把 DOCX 另存为 PDF 再投", "primary"));
       break;
     case "ready":
-      items.push(<TextButton key="parse" variant="primary" onClick={() => onDemo("解析")}>解析</TextButton>);
+      items.push(
+        <TextButton key="parse" variant="primary" onClick={() => onDemo("解析")}>解析</TextButton>,
+        <label key="swap" className="cursor-pointer rounded-(--radius) px-3 py-1.5
+          text-sm font-medium text-neutral-600 ring-1 ring-transparent
+          hover:bg-neutral-950/5 dark:text-neutral-300 dark:hover:bg-white/10">
+          换个文件
+          <input type="file" accept="image/*,application/pdf" className="sr-only"
+            onChange={(e) => onPick(e.target.files)} />
+        </label>);
       break;
     case "parsing":
       items.push(<p key="busy" className="px-3 text-sm text-neutral-500">解析中…</p>);

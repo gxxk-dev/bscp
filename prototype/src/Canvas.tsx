@@ -45,20 +45,29 @@ export function Canvas(props: {
   }>(null);
   const pinch = useRef<{ dist: number; k: number } | null>(null);
   const [grabbing, setGrabbing] = useState(false);
+  /* 正在被拖的块。拿起来要看得出来——没有这一层，手指和眼睛对不上，
+     「手感」就无从谈起。不用缩放：缩放会让块的边跟着动，落点反而变难瞄。 */
+  const [lift, setLift] = useState<string[]>([]);
 
-  /* 视野有两个来源：自动居中（fit）和操作者自己调过的（live）。
-     换屏或按「适应画布」时丢掉 live——留着它的话，从「推近看细节」
-     切到下一条路径会莫名其妙还停在放大的地方。 */
+  /* ---------- 相机 ----------
+     相机的唯一所有者是操作者。早先这里把 board.regions 放进依赖里，
+     于是拖一块 → regions 变 → 重新居中 → 每一帧画面都在手底下滑动。
+     那不是手感问题，那是相机在跟操作者抢方向。
+
+     所以自动取景只认两种触发：
+       - 换屏（fitNonce 变）——演示脚手架切到另一条路径，等于换了一份资料
+       - 按「适应画布」——操作者明确要求的
+     拖动、投放、增删区域一律不动相机。 */
   const [fit, setFit] = useState<View>({ x: 0, y: 0, k: 1 });
   const [live, setLive] = useState<View | null>(null);
   const view = live ?? fit;
 
-  useLayoutEffect(() => { setLive(null); }, [zoom, fill, fitNonce, board.regions]);
+  useLayoutEffect(() => { setLive(null); }, [fitNonce]);
   useLayoutEffect(() => {
     const r = vp.current?.getBoundingClientRect();
     if (!r || !board.regions.length) return;
     setFit(fitView(board.regions, { w: r.width, h: r.height }, zoom, fill));
-  }, [board.regions, zoom, fill]);
+  }, [fitNonce, zoom, fill]);
 
   const onView = useCallback((v: View) => setLive(v), []);
 
@@ -99,6 +108,7 @@ export function Canvas(props: {
         parts: parts.map((q) => ({ id: q.id, x: q.x, y: q.y })),
       };
       onSelect(r.id);
+      setLift(parts.map((q) => q.id));
       return;
     }
     drag.current = { kind: "pan", start: { x: e.clientX, y: e.clientY }, from: view, parts: [] };
@@ -144,7 +154,7 @@ export function Canvas(props: {
   function endPointer(e: ReactPointerEvent<HTMLDivElement>) {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
-    if (pointers.current.size === 0) { drag.current = null; setGrabbing(false); }
+    if (pointers.current.size === 0) { drag.current = null; setGrabbing(false); setLift([]); }
   }
 
   function zoomAt(cx: number, cy: number, k: number) {
@@ -185,6 +195,7 @@ export function Canvas(props: {
         ${interactive ? (grabbing ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
     >
       <div
+        id="stage"
         className="absolute top-0 left-0 origin-top-left will-change-transform"
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
       >
@@ -197,6 +208,7 @@ export function Canvas(props: {
             grouped={board.groups && !!r.unit}
             badged={board.badges}
             handles={board.editing === r.id}
+            lifted={lift.includes(r.id)}
           />
         ))}
       </div>
@@ -211,8 +223,9 @@ function RegionBox(props: {
   grouped: boolean;
   badged: boolean;
   handles: boolean;
+  lifted: boolean;
 }) {
-  const { r, selected, pending, grouped, badged, handles } = props;
+  const { r, selected, pending, grouped, badged, handles, lifted } = props;
   /* general.md：同一属性不能挂两套互相覆盖的类。同一块若同时「未拍板」
      和「在某组里」，只画一层虚线，用颜色区分两种含义。 */
   const outline = grouped
@@ -222,14 +235,15 @@ function RegionBox(props: {
     <div
       data-id={r.id}
       style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
-      className={`region absolute rounded-(--radius) bg-white shadow-xs
+      className={`region absolute rounded-(--radius) bg-white
+        ${lifted ? "z-10 shadow-md" : "shadow-xs"}
         dark:bg-neutral-900 dark:shadow-none dark:inset-ring dark:inset-ring-white/5
         ${selected ? "ring-2 ring-emerald-600"
                   : "ring-1 ring-neutral-950/10 dark:ring-white/10"}
         ${pending ? "opacity-70" : ""} ${outline}`}
     >
       <div className="relative h-full overflow-hidden rounded-(--radius)">
-        <div className="h-full p-3">{body(r)}</div>
+        <div className="h-full p-3">{r.src ? <div className="h-full">{body(r)}</div> : body(r)}</div>
       </div>
       {handles &&
         Object.entries(HANDLE).map(([k, cls]) => (
@@ -243,6 +257,9 @@ function RegionBox(props: {
 }
 
 function body(r: Region) {
+  if (r.src) {
+    return <img src={r.src} alt="" className="size-full object-contain" draggable={false} />;
+  }
   if (r.figure) {
     /* 图区不用图标充数：它代表的是原件里裁出来的一块图。
        画个大图标会让人误以为这块内容是我们生成的。 */

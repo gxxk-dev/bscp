@@ -27,6 +27,8 @@ export type Region = {
   bars?: string[];
   figure?: boolean;
   table?: string[][];
+  /** 真实投放进来的图片：块直接显示它，而不是示例内容 */
+  src?: string;
   /** 由「继续切碎」派生出来的子块 */
   child?: boolean;
 };
@@ -227,7 +229,70 @@ export function replaceWith(regions: Region[], seedId: string, parts: number): R
   return regions.flatMap((r) => (r.id === seedId ? derive(seedId, parts) : [r]));
 }
 
-/* ---------- 视野 ---------- */
+/* ---------- 投放 ----------
+   首版只收图片和 PDF（ADR-0009）。拒绝必须**当场说清**：哪个文件、为什么、
+   怎么办。丢一个「失败」标签等于把问题推回给操作者自己猜。
+
+   这段闸门放在最前面是有意的：它必须是整条管线的唯一入口，
+   后面每一处都只处理「已经收下的文件」。 */
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOC = "application/msword";
+
+export type DropVerdict =
+  | { ok: true; kind: "image"; url: string }
+  | { ok: true; kind: "pdf" }
+  | { ok: false; reason: string };
+
+export function acceptFile(file: File): DropVerdict {
+  const name = file.name;
+  if (file.type === DOCX || file.type === DOC || /\.(docx?|rtf|odt)$/i.test(name)) {
+    return { ok: false, reason: `${name} 是 Word 文档，首版不收 Word。` };
+  }
+  if (file.type === "application/pdf" || /\.pdf$/i.test(name)) {
+    /* PDF 在真产品里由服务端用 PyMuPDF 栅格化（ADR-0008）。原型里不栅格化，
+       但**必须**在这里就把栅格化这一步标出来，否则评审者会以为
+       「投进来就能拿到文字」——而那正是我们已经否掉的路。 */
+    return { ok: true, kind: "pdf" };
+  }
+  if (file.type.startsWith("image/")) {
+    return { ok: true, kind: "image", url: URL.createObjectURL(file) };
+  }
+  return {
+    ok: false,
+    reason: `${name} 不是图片也不是 PDF，首版只收这两种。`,
+  };
+}
+
+export function rejectionHint(reason: string): string {
+  return `${reason}在希沃里另存为 PDF，或截图后直接投。`;
+}
+
+/** 收下之后画布上出现什么。图片直接显示它自己——原型里最诚实的一步是
+    让人真丢一张试卷照片进来，然后亲手把区域拖开。 */
+export function boardForFile(verdict: Extract<DropVerdict, { ok: true }>): Board {
+  const region: Region = verdict.kind === "image"
+    ? { id: "r1", x: 0, y: 0, w: 1000, h: 700, page: 1, unit: null, src: verdict.url }
+    : { id: "r1", x: 0, y: 0, w: 1000, h: 700, page: 1, unit: null, figure: true };
+  return {
+    ...freshBoard([]),
+    regions: [region],
+    selected: null,
+  };
+}
+
+export function readyScene(board: Board, file: File): Scene {
+  return {
+    ...freshScene(),
+    screen: "ready",
+    board,
+    toast: `已投放 ${file.name}（${mb(file.size)}）。原件留着，换 DPI 重栅格化还要用它。`,
+  };
+}
+
+export const mb = (bytes: number) =>
+  bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/* ---------- 内容包围盒 ---------- */
 export function boxOf(regions: Region[]) {
   const xs = regions.map((r) => r.x), ys = regions.map((r) => r.y);
   const x = Math.min(...xs), y = Math.min(...ys);
