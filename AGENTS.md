@@ -65,6 +65,12 @@ Issue 以 GitHub Issues 的形式管理，用 `gh` CLI 操作。见 `docs/agents
 
 单上下文（single-context）：仓库根目录一份 `CONTEXT.md`，决策记录在 `docs/adr/`。见 `docs/agents/domain.md`。
 
+### 规格与原型
+
+首版规格在 `docs/specs/0001-v1.md`。规格里那 12 条交互不变量有原型作证，
+`prototype/` 是它们不可替代的来源，不要当成用完就扔的临时物；动交互前先跑
+`cd prototype && bun run smoke`。见 `docs/specs/0001-v1.md` 的「原型的地位」。
+
 ## 调研笔记
 
 `docs/research/` 存放带一手来源引用的调研结论。写代码前先看有没有相关的笔记。
