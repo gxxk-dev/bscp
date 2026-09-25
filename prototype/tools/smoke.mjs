@@ -78,8 +78,11 @@ const STEPS = {
 
 const fails = [];
 const notes = [];
-const check = (cond, msg) => { if (!cond) fails.push(msg); };
-const note = (msg) => notes.push(msg);
+/* 失败与观察都带上视口标签：同一屏在两个尺寸下可能一个过一个不过，
+   没有标签就只能靠猜是哪边坏了。 */
+let vpLabel = "";
+const check = (cond, msg) => { if (!cond) fails.push(`[${vpLabel}] ${msg}`); };
+const note = (msg) => notes.push(`[${vpLabel}] ${msg}`);
 
 const server = spawn("bunx", ["vite", "preview", "--port", "4173", "--strictPort"],
   { cwd: root, stdio: "ignore" });
@@ -100,11 +103,15 @@ await waitForServer();
 mkdirSync(SHOTS, { recursive: true });
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-
-const errors = [];
-page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+/* 目标屏是 1920×1080（ADR-0018），但这 32 屏断言是按 1440×900 桌面视口调的。
+   两个都要跑，**不是二选一**：1440 验开发时的桌面，1920 验真正要投屏的那台机器。
+   4K 不在这里跑——4K 的处理是根字号放大一档（ADR-0018），那要等实现阶段。 */
+const VIEWPORTS = [
+  { width: 1440, height: 900, label: "1440×900" },
+  { width: 1920, height: 1080, label: "1920×1080" },
+];
+/* go/boxes/cam 闭包引用 page，所以 page 是可变绑定而不是每次新建的局部量。 */
+let page;
 
 const go = (path, step) =>
   page.goto(`${ORIGIN}/?path=${path}&step=${step}`, { waitUntil: "load" });
@@ -119,6 +126,18 @@ const boxes = () => page.locator("[data-id]").evaluateAll((els) =>
 /* 相机的 transform 就在 #stage 上。空画布时也得读得到——投放那一屏
    恰恰是没有区域的。 */
 const cam = () => page.locator("#stage").evaluate((e) => getComputedStyle(e).transform);
+
+/* 叫 vpSize 不叫 vp：函数体里已经有一个 `const vp` 是 #app 的 boundingBox，
+   同名会把循环变量遮蔽进暂时性死区。 */
+for (const vpSize of VIEWPORTS) {
+  vpLabel = vpSize.label;
+  const shots = join(SHOTS, `${vpSize.width}x${vpSize.height}`);
+  mkdirSync(shots, { recursive: true });
+  page = await browser.newPage({ viewport: { width: vpSize.width, height: vpSize.height } });
+
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
 
 // ---------- 1. 每一屏都不许有运行时错误 ----------
 for (const p of ORDER) for (let s = 0; s < STEPS[p]; s++) await go(p, s);
@@ -250,7 +269,7 @@ const casBadges = await page.locator(".src-badge").allTextContents();
 check(casBadges.length === 3 && casBadges.every((b) => /卷子|板书|实验/.test(b)),
   `三份都要带自己的来源角标，实际：${JSON.stringify(casBadges)}`);
 note(`3 份依次向右下 ${sx}×${sy}px，整叠在视野内，相机不动，角标各带文件名`);
-await page.screenshot({ path: join(SHOTS, "drop-cascade.png") });
+await page.screenshot({ path: join(shots, "drop-cascade.png") });
 
 /* 补投不该抹掉已有的一批。抹掉等于逼人从头再来一遍。 */
 await go("drop", 0);
@@ -446,9 +465,10 @@ await go("arrange", 0);
 const before = (await boxes()).find((b) => b.id === "r6").y;
 const box = await page.locator('[data-id="r6"]').boundingBox();
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+const camAtGrab = await cam();
 await page.mouse.down();
 await page.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 - 90, { steps: 8 });
-check((await cam()) === await cam(), "相机在拖动过程中动了 —— 手感就是被这个毁掉的");
+check((await cam()) === camAtGrab, "相机在拖动过程中动了 —— 手感就是被这个毁掉的");
 check((await boxes()).find((b) => b.id === "r6").y !== before, "拖动 r6 应当改变它的位置");
 
 /* 逐帧查：相机必须在整段拖动里纹丝不动 */
@@ -529,7 +549,7 @@ const posBefore = new Map((await boxes()).map((b) => [b.id, `${b.x},${b.y}`]));
 await dragBy("r3", 0, 260);
 const nudged = (await boxes()).filter((b) => posBefore.get(b.id) !== `${b.x},${b.y}`).map((b) => b.id);
 check(nudged.join(",") === "r3", `前移只该动层次，实际被挪动的是 ${nudged.join(",") || "（无）"}`);
-await page.screenshot({ path: join(SHOTS, "arrange-raised.png") });
+await page.screenshot({ path: join(shots, "arrange-raised.png") });
 
 // ---------- 截图 ----------
 for (const [p, s] of [["drop", 0], ["drop", 1], ["reject", 1], ["scatter", 0], ["scatter", 1],
@@ -537,8 +557,11 @@ for (const [p, s] of [["drop", 0], ["drop", 1], ["reject", 1], ["scatter", 0], [
                       ["arrange", 2], ["reread", 1], ["reread", 2], ["rerun", 1],
                       ["cast", 0], ["cast", 1], ["nav", 0], ["nav", 1]]) {
   await go(p, s);
-  await page.screenshot({ path: join(SHOTS, `${p}-${s}.png`) });
+  await page.screenshot({ path: join(shots, `${p}-${s}.png`) });
 }
+
+await page.close();
+}   /* ← VIEWPORTS 循环到此为止 */
 
 await browser.close();
 stop();
@@ -551,4 +574,5 @@ if (fails.length) {
   for (const f of fails) console.log("  - " + f);
   process.exit(1);
 }
-console.log(`✓ 12 条路径 / ${ORDER.reduce((n, p) => n + STEPS[p], 0)} 屏全部通过`);
+console.log(`✓ 12 条路径 / ${ORDER.reduce((n, p) => n + STEPS[p], 0)} 屏 × `
+  + `${VIEWPORTS.length} 个视口（${VIEWPORTS.map((v) => v.label).join("、")}）全部通过`);
