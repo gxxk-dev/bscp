@@ -24,3 +24,8 @@ PP-StructureV3 完整产线、PaddleOCR-VL 完整流程、PP-OCRv6_medium 都只
   ——这反过来锁定了后端位置。
 - 两层结果都缓存，但失效条件不同：视觉层按资源内容哈希，决策层还要算上
   模型后端与提示的变化。
+- **并发模型必须是多进程，不是多线程。** PyMuPDF 官方明确**不支持多线程**，
+  只能 multiprocessing（官方称约快一倍）；渲染出的 pixmap 官方也警告体积
+  "typically large"。因此服务端要按「多进程 worker」设计，扩容走进程或容器，
+  不靠线程池——这会直接影响容器编排与内存预算。
+- 许可需留意：PDF 路径上的 PyMuPDF 与 `pymupdf-layout` 都是 **AGPL-3.0 / 商业双许可**。
