@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@source "./canvas-ui.html";
+@source "./app.js";
+
+@theme {
+  /* custom-fonts.md：正文/UI 字体注册为 --font-sans；Inter 由 <head> 的 <link> 载入 */
+  --font-sans: "InterVariable", "Inter", ui-sans-serif, system-ui,
+               "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "ss03";
+}
+
+@layer base {
+  :root {
+    /* border-radius.md：同心圆角。--radius 与 --padding 成对出现，
+       容器改写这两个变量，内部元素用 calc 推出自己的圆角，数学关系被强制。 */
+    --radius: 0.5rem;
+    --padding: 0.25rem;
+  }
+}
+
+/* general.md：可复用样式优先用 @utility，这样能吃到所有变体 */
+@utility icon-btn {
+  @apply relative grid place-items-center
+         rounded-[calc(var(--radius)-var(--padding))]
+         focus-visible:outline-2 focus-visible:outline-offset-2
+         focus-visible:outline-emerald-600;
+}
+
+/* colors.md：不用 indigo，中性色用 neutral（不用 gray/slate）
+   icons.md：实心图标用 fill-*，不用 text-* + currentColor */
+@utility icon-glyph {
+  @apply size-4 shrink-0 fill-neutral-500
+         group-hover:fill-neutral-900
+         dark:fill-neutral-400 dark:group-hover:fill-white;
+}
+
+/* buttons.md：48×48px 最小触控目标——可见尺寸可以小，命中区靠这层补。
+   pointer-fine:hidden 保证只有粗指针（手指）吃到它，鼠标用户吃不到。 */
+@utility hit-expand {
+  @apply pointer-events-none absolute top-1/2 left-1/2
+         size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden;
+}

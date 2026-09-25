@@ -1,0 +1,13 @@
+{
+  "name": "bscp-prototype-canvas-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "playwright-core": "^1.63.0",
+    "tailwindcss": "^4.1.14"
+  }
+}

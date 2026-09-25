@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="zh-CN" class="antialiased">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>prototype · 画布与控件 · bscp</title>
+<!--
+  ============================================================================
+  PROTOTYPE —— 一次性代码，用来回答一个设计问题，不是产品代码。
+
+  问题：三个画布控件的结构变体，通过 ?variant= 切换 ——
+        A 角落裸图标 / B 底部细条 / C 全净 + 长按径向菜单。
+  要回答：在大屏触控环境下，
+        （a）控件可见尺寸能小到什么程度（命中区由 hit-expand 保底 48px），
+        （b）常驻控件会不会挡住要给学生看的内容，
+        （c）在「操作痕迹会被学生看到」这个约束下（ADR-0004），
+             哪种控件的存在感可以被接受。
+
+  注意：区域内容用灰条代替原始资料的裁切位图。本原型只评判控件、遮挡与手感，
+        不评判字号是否可读。
+
+  本文件由 src/ 构建产出，不要直接改。改 src/ 后运行：bun run build
+  ============================================================================
+-->
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<style>/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after,::backdrop{--tw-translate-x:0;--tw-translate-y:0;--tw-translate-z:0;--tw-outline-style:solid;--tw-scale-x:1;--tw-scale-y:1;--tw-scale-z:1;--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-border-style:solid;--tw-gradient-position:initial;--tw-gradient-from:#0000;--tw-gradient-via:#0000;--tw-gradient-to:#0000;--tw-gradient-stops:initial;--tw-gradient-via-stops:initial;--tw-gradient-from-position:0%;--tw-gradient-via-position:50%;--tw-gradient-to-position:100%;--tw-font-weight:initial;--tw-tracking:initial;--tw-ordinal:initial;--tw-slashed-zero:initial;--tw-numeric-figure:initial;--tw-numeric-spacing:initial;--tw-numeric-fraction:initial;--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-backdrop-blur:initial;--tw-backdrop-brightness:initial;--tw-backdrop-contrast:initial;--tw-backdrop-grayscale:initial;--tw-backdrop-hue-rotate:initial;--tw-backdrop-invert:initial;--tw-backdrop-opacity:initial;--tw-backdrop-saturate:initial;--tw-backdrop-sepia:initial}}}@layer theme{:root,:host{--font-sans:"InterVariable", "Inter", ui-sans-serif, system-ui, "Noto Sans SC", "Microsoft YaHei", sans-serif;--font-mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;--color-red-200:oklch(88.5% .062 18.334);--color-red-400:oklch(70.4% .191 22.216);--color-red-700:oklch(50.5% .213 27.518);--color-red-900:oklch(39.6% .141 25.723);--color-emerald-600:oklch(59.6% .145 163.225);--color-neutral-100:oklch(97% 0 none);--color-neutral-300:oklch(87% 0 none);--color-neutral-400:oklch(70.8% 0 none);--color-neutral-500:oklch(55.6% 0 none);--color-neutral-600:oklch(43.9% 0 none);--color-neutral-800:oklch(26.9% 0 none);--color-neutral-900:oklch(20.5% 0 none);--color-neutral-950:oklch(14.5% 0 none);--color-white:#fff;--spacing:.25rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--text-sm:.875rem;--text-sm--line-height:calc(1.25 / .875);--font-weight-medium:500;--font-weight-semibold:600;--tracking-wide:.025em;--radius-sm:.25rem;--radius-md:.375rem;--radius-xl:.75rem;--blur-sm:8px;--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1);--default-font-family:var(--font-sans);--default-font-feature-settings:var(--font-sans--font-feature-settings);--default-mono-font-family:var(--font-mono);--font-sans--font-feature-settings:"cv02", "cv03", "cv04", "cv11", "ss01", "ss03"}}@layer base{*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}::file-selector-button{box-sizing:border-box;border:0 solid;margin:0;padding:0}html,:host{-webkit-text-size-adjust:100%;tab-size:4;line-height:1.5;font-family:var(--default-font-family,-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");font-feature-settings:var(--default-font-feature-settings,normal);font-variation-settings:var(--default-font-variation-settings,normal);-webkit-tap-highlight-color:transparent}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:var(--default-mono-font-family,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);font-feature-settings:var(--default-mono-font-feature-settings,normal);font-variation-settings:var(--default-mono-font-variation-settings,normal);font-size:1em}small{font-size:80%}sub,sup{vertical-align:baseline;font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}:-moz-focusring:where(:not(iframe)){outline:auto}progress{vertical-align:baseline}summary{display:list-item}ol,ul,menu{list-style:none}img,svg,video,canvas,audio,iframe,embed,object{vertical-align:middle;display:block}img,video{max-width:100%;height:auto}button,input,select,optgroup,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}::file-selector-button{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}:where(select:is([multiple],[size])) optgroup{font-weight:bolder}:where(select:is([multiple],[size])) optgroup option{padding-inline-start:20px}::file-selector-button{margin-inline-end:4px}::placeholder{opacity:1}@supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px){::placeholder{color:currentColor}@supports (color:color-mix(in lab, red, red)){::placeholder{color:color-mix(in oklab, currentcolor 50%, transparent)}}}textarea{resize:vertical}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-date-and-time-value{min-height:1lh;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-datetime-edit{padding-block:0}::-webkit-datetime-edit-year-field{padding-block:0}::-webkit-datetime-edit-month-field{padding-block:0}::-webkit-datetime-edit-day-field{padding-block:0}::-webkit-datetime-edit-hour-field{padding-block:0}::-webkit-datetime-edit-minute-field{padding-block:0}::-webkit-datetime-edit-second-field{padding-block:0}::-webkit-datetime-edit-millisecond-field{padding-block:0}::-webkit-datetime-edit-meridiem-field{padding-block:0}::-webkit-calendar-picker-indicator{line-height:1}:-moz-ui-invalid{box-shadow:none}button,input:where([type=button],[type=reset],[type=submit]){appearance:button}::file-selector-button{appearance:button}::-webkit-inner-spin-button{height:auto}::-webkit-outer-spin-button{height:auto}[hidden]:where(:not([hidden=until-found])){display:none!important}:root{--radius:.5rem;--padding:.25rem}}@layer components;@layer utilities{.hit-expand{pointer-events:none;--tw-translate-x:calc(calc(1 / 2 * 100%) * -1);--tw-translate-y:calc(calc(1 / 2 * 100%) * -1);width:max(100%,3rem);height:max(100%,3rem);translate:var(--tw-translate-x) var(--tw-translate-y);position:absolute;top:50%;left:50%}@media (pointer:fine){.hit-expand{display:none}}.pointer-events-none{pointer-events:none}.icon-btn{border-radius:calc(var(--radius) - var(--padding));place-items:center;display:grid;position:relative}.icon-btn:focus-visible{outline-style:var(--tw-outline-style);outline-offset:2px;outline-width:2px;outline-color:var(--color-emerald-600)}.absolute{position:absolute}.fixed{position:fixed}.relative{position:relative}.inset-0{inset:0}.-top-1{top:calc(var(--spacing) * -1)}.-top-1\.5{top:calc(var(--spacing) * -1.5)}.top-\(--ry\){top:var(--ry)}.top-\(--y\){top:var(--y)}.top-0{top:0}.top-1{top:var(--spacing)}.top-1\/2{top:50%}.top-3{top:calc(var(--spacing) * 3)}.top-3\.5{top:calc(var(--spacing) * 3.5)}.-right-1{right:calc(var(--spacing) * -1)}.-right-1\.5{right:calc(var(--spacing) * -1.5)}.right-3{right:calc(var(--spacing) * 3)}.-bottom-1{bottom:calc(var(--spacing) * -1)}.-bottom-1\.5{bottom:calc(var(--spacing) * -1.5)}.bottom-2{bottom:calc(var(--spacing) * 2)}.bottom-2\.5{bottom:calc(var(--spacing) * 2.5)}.bottom-3{bottom:calc(var(--spacing) * 3)}.bottom-3\.5{bottom:calc(var(--spacing) * 3.5)}.bottom-16{bottom:calc(var(--spacing) * 16)}.-left-1{left:calc(var(--spacing) * -1)}.-left-1\.5{left:calc(var(--spacing) * -1.5)}.left-\(--rx\){left:var(--rx)}.left-\(--x\){left:var(--x)}.left-0{left:0}.left-1{left:var(--spacing)}.left-1\/2{left:50%}.left-2{left:calc(var(--spacing) * 2)}.left-2\.5{left:calc(var(--spacing) * 2.5)}.isolate{isolation:isolate}.z-40{z-index:40}.z-50{z-index:50}.z-90{z-index:90}.mx-1{margin-inline:var(--spacing)}.my-1{margin-block:var(--spacing)}.my-1\.5{margin-block:calc(var(--spacing) * 1.5)}.mb-2{margin-bottom:calc(var(--spacing) * 2)}.block{display:block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.table{display:table}.icon-glyph{width:calc(var(--spacing) * 4);height:calc(var(--spacing) * 4);fill:var(--color-neutral-500);flex-shrink:0}@media (hover:hover){.icon-glyph:is(:where(.group):hover *){fill:var(--color-neutral-900)}}@media (prefers-color-scheme:dark){.icon-glyph{fill:var(--color-neutral-400)}@media (hover:hover){.icon-glyph:is(:where(.group):hover *){fill:var(--color-white)}}}.size-3{width:calc(var(--spacing) * 3);height:calc(var(--spacing) * 3)}.size-3\.5{width:calc(var(--spacing) * 3.5);height:calc(var(--spacing) * 3.5)}.size-4{width:calc(var(--spacing) * 4);height:calc(var(--spacing) * 4)}.size-7{width:calc(var(--spacing) * 7);height:calc(var(--spacing) * 7)}.size-8{width:calc(var(--spacing) * 8);height:calc(var(--spacing) * 8)}.size-9{width:calc(var(--spacing) * 9);height:calc(var(--spacing) * 9)}.size-11{width:calc(var(--spacing) * 11);height:calc(var(--spacing) * 11)}.h-\(--h\){height:var(--h)}.h-1{height:var(--spacing)}.h-1\.5{height:calc(var(--spacing) * 1.5)}.h-4{height:calc(var(--spacing) * 4)}.h-full{height:100%}.w-\(--w\){width:var(--w)}.w-\[45\%\]{width:45%}.w-\[60\%\]{width:60%}.w-\[75\%\]{width:75%}.w-\[90\%\]{width:90%}.w-px{width:1px}.max-w-\[calc\(100dvw-1\.5rem\)\]{max-width:calc(100dvw - 1.5rem)}.min-w-9{min-width:calc(var(--spacing) * 9)}.shrink-0{flex-shrink:0}.origin-top-left{transform-origin:0 0}.-translate-x-1{--tw-translate-x:calc(var(--spacing) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.-translate-x-1\/2{--tw-translate-x:calc(calc(1 / 2 * 100%) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-x-\(--vx\){--tw-translate-x:var(--vx);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-x-\(--wx\){--tw-translate-x:var(--wx);translate:var(--tw-translate-x) var(--tw-translate-y)}.-translate-y-1{--tw-translate-y:calc(var(--spacing) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.-translate-y-1\/2{--tw-translate-y:calc(calc(1 / 2 * 100%) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-y-\(--vy\){--tw-translate-y:var(--vy);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-y-\(--wy\){--tw-translate-y:var(--wy);translate:var(--tw-translate-x) var(--tw-translate-y)}.scale-110{--tw-scale-x:110%;--tw-scale-y:110%;--tw-scale-z:110%;scale:var(--tw-scale-x) var(--tw-scale-y)}.scale-\(--vk\){scale:var(--vk)}.transform{transform:var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)}.cursor-grab{cursor:grab}.cursor-grabbing{cursor:grabbing}.cursor-nesw-resize{cursor:nesw-resize}.cursor-nwse-resize{cursor:nwse-resize}.touch-none{touch-action:none}.resize{resize:both}.flex-col{flex-direction:column}.place-items-center{place-items:center}.items-center{align-items:center}.gap-x-0{column-gap:0}.gap-x-0\.5{column-gap:calc(var(--spacing) * .5)}.gap-x-2{column-gap:calc(var(--spacing) * 2)}.gap-x-2\.5{column-gap:calc(var(--spacing) * 2.5)}.gap-y-1{row-gap:var(--spacing)}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.rounded-\(--radius\){border-radius:var(--radius)}.rounded-full{border-radius:3.40282e38px}.rounded-md{border-radius:var(--radius-md)}.rounded-sm{border-radius:var(--radius-sm)}.rounded-br-md{border-bottom-right-radius:var(--radius-md)}.border{border-style:var(--tw-border-style);border-width:1px}.bg-emerald-600{background-color:var(--color-emerald-600)}.bg-neutral-100{background-color:var(--color-neutral-100)}.bg-neutral-950{background-color:var(--color-neutral-950)}.bg-neutral-950\/5{background-color:#0a0a0a0d}@supports (color:color-mix(in lab, red, red)){.bg-neutral-950\/5{background-color:color-mix(in oklab, var(--color-neutral-950) 5%, transparent)}}.bg-neutral-950\/10{background-color:#0a0a0a1a}@supports (color:color-mix(in lab, red, red)){.bg-neutral-950\/10{background-color:color-mix(in oklab, var(--color-neutral-950) 10%, transparent)}}.bg-white{background-color:var(--color-white)}.bg-white\/10{background-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.bg-white\/10{background-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}.bg-white\/85{background-color:#ffffffd9}@supports (color:color-mix(in lab, red, red)){.bg-white\/85{background-color:color-mix(in oklab, var(--color-white) 85%, transparent)}}.bg-linear-to-br{--tw-gradient-position:to bottom right}@supports (background-image:linear-gradient(in lab, red, red)){.bg-linear-to-br{--tw-gradient-position:to bottom right in oklab}}.bg-linear-to-br{background-image:linear-gradient(var(--tw-gradient-stops))}.from-neutral-950{--tw-gradient-from:var(--color-neutral-950);--tw-gradient-stops:var(--tw-gradient-via-stops,var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position))}.to-neutral-950{--tw-gradient-to:var(--color-neutral-950);--tw-gradient-stops:var(--tw-gradient-via-stops,var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position))}.fill-neutral-600{fill:var(--color-neutral-600)}.fill-white{fill:var(--color-white)}.p-\(--padding\){padding:var(--padding)}.p-3{padding:calc(var(--spacing) * 3)}.px-1{padding-inline:var(--spacing)}.px-1\.5{padding-inline:calc(var(--spacing) * 1.5)}.px-2{padding-inline:calc(var(--spacing) * 2)}.px-2\.5{padding-inline:calc(var(--spacing) * 2.5)}.px-3{padding-inline:calc(var(--spacing) * 3)}.py-0{padding-block:0}.py-0\.5{padding-block:calc(var(--spacing) * .5)}.py-1{padding-block:var(--spacing)}.py-1\.5{padding-block:calc(var(--spacing) * 1.5)}.pt-7{padding-top:calc(var(--spacing) * 7)}.pr-2{padding-right:calc(var(--spacing) * 2)}.pl-3{padding-left:calc(var(--spacing) * 3)}.pl-3\.5{padding-left:calc(var(--spacing) * 3.5)}.text-center{text-align:center}.font-sans{font-family:var(--font-sans);font-feature-settings:var(--font-sans--font-feature-settings)}.text-sm{font-size:var(--text-sm);line-height:var(--tw-leading,var(--text-sm--line-height))}.text-xs{font-size:var(--text-xs);line-height:var(--tw-leading,var(--text-xs--line-height))}.text-\[0\.625rem\]{font-size:.625rem}.font-medium{--tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}.font-semibold{--tw-font-weight:var(--font-weight-semibold);font-weight:var(--font-weight-semibold)}.tracking-wide{--tw-tracking:var(--tracking-wide);letter-spacing:var(--tracking-wide)}.text-balance{text-wrap:balance}.text-pretty{text-wrap:pretty}.whitespace-nowrap{white-space:nowrap}.text-neutral-400{color:var(--color-neutral-400)}.text-neutral-600{color:var(--color-neutral-600)}.text-neutral-900{color:var(--color-neutral-900)}.text-red-700{color:var(--color-red-700)}.text-white{color:var(--color-white)}.tabular-nums{--tw-numeric-spacing:tabular-nums;font-variant-numeric:var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,)}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.shadow-lg{--tw-shadow:0 10px 15px -3px var(--tw-shadow-color,#0000001a), 0 4px 6px -4px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-xs{--tw-shadow:0 1px 2px 0 var(--tw-shadow-color,#0000000d);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.ring-1{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.ring-2{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.ring-emerald-600{--tw-ring-color:var(--color-emerald-600)}.ring-neutral-950{--tw-ring-color:var(--color-neutral-950)}.ring-neutral-950\/5{--tw-ring-color:#0a0a0a0d}@supports (color:color-mix(in lab, red, red)){.ring-neutral-950\/5{--tw-ring-color:color-mix(in oklab, var(--color-neutral-950) 5%, transparent)}}.ring-neutral-950\/10{--tw-ring-color:#0a0a0a1a}@supports (color:color-mix(in lab, red, red)){.ring-neutral-950\/10{--tw-ring-color:color-mix(in oklab, var(--color-neutral-950) 10%, transparent)}}.ring-red-200{--tw-ring-color:var(--color-red-200)}.outline{outline-style:var(--tw-outline-style);outline-width:1px}.outline-2{outline-style:var(--tw-outline-style);outline-width:2px}.outline-emerald-600{outline-color:var(--color-emerald-600)}.backdrop-blur-sm{--tw-backdrop-blur:blur(var(--blur-sm));-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-filter{-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-transform{transition-property:transform,translate,scale,rotate;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.\[--padding\:--spacing\(1\.5\)\]{--padding:calc(var(--spacing) * 1.5)}.\[--radius\:var\(--radius-xl\)\]{--radius:var(--radius-xl)}@media (hover:hover){.hover\:bg-neutral-950\/5:hover{background-color:#0a0a0a0d}@supports (color:color-mix(in lab, red, red)){.hover\:bg-neutral-950\/5:hover{background-color:color-mix(in oklab, var(--color-neutral-950) 5%, transparent)}}.hover\:bg-white\/25:hover{background-color:#ffffff40}@supports (color:color-mix(in lab, red, red)){.hover\:bg-white\/25:hover{background-color:color-mix(in oklab, var(--color-white) 25%, transparent)}}}@media (prefers-color-scheme:dark){.dark\:bg-neutral-800{background-color:var(--color-neutral-800)}.dark\:bg-neutral-900{background-color:var(--color-neutral-900)}.dark\:bg-neutral-900\/85{background-color:#171717d9}@supports (color:color-mix(in lab, red, red)){.dark\:bg-neutral-900\/85{background-color:color-mix(in oklab, var(--color-neutral-900) 85%, transparent)}}.dark\:bg-neutral-950{background-color:var(--color-neutral-950)}.dark\:bg-white\/5{background-color:#ffffff0d}@supports (color:color-mix(in lab, red, red)){.dark\:bg-white\/5{background-color:color-mix(in oklab, var(--color-white) 5%, transparent)}}.dark\:bg-white\/10{background-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.dark\:bg-white\/10{background-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}.dark\:bg-white\/15{background-color:#ffffff26}@supports (color:color-mix(in lab, red, red)){.dark\:bg-white\/15{background-color:color-mix(in oklab, var(--color-white) 15%, transparent)}}.dark\:fill-neutral-300{fill:var(--color-neutral-300)}.dark\:text-neutral-100{color:var(--color-neutral-100)}.dark\:text-neutral-300{color:var(--color-neutral-300)}.dark\:text-neutral-400{color:var(--color-neutral-400)}.dark\:text-red-400{color:var(--color-red-400)}.dark\:shadow-none{--tw-shadow:0 0 #0000;box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.dark\:inset-ring{--tw-inset-ring-shadow:inset 0 0 0 1px var(--tw-inset-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.dark\:ring-red-900{--tw-ring-color:var(--color-red-900)}.dark\:ring-white\/10{--tw-ring-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.dark\:ring-white\/10{--tw-ring-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}.dark\:inset-ring-white\/5{--tw-inset-ring-color:#ffffff0d}@supports (color:color-mix(in lab, red, red)){.dark\:inset-ring-white\/5{--tw-inset-ring-color:color-mix(in oklab, var(--color-white) 5%, transparent)}}@media (hover:hover){.dark\:hover\:bg-white\/10:hover{background-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.dark\:hover\:bg-white\/10:hover{background-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}}}}@property --tw-translate-x{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-y{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-z{syntax:"*";inherits:false;initial-value:0}@property --tw-outline-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-scale-x{syntax:"*";inherits:false;initial-value:1}@property --tw-scale-y{syntax:"*";inherits:false;initial-value:1}@property --tw-scale-z{syntax:"*";inherits:false;initial-value:1}@property --tw-rotate-x{syntax:"*";inherits:false}@property --tw-rotate-y{syntax:"*";inherits:false}@property --tw-rotate-z{syntax:"*";inherits:false}@property --tw-skew-x{syntax:"*";inherits:false}@property --tw-skew-y{syntax:"*";inherits:false}@property --tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-gradient-position{syntax:"*";inherits:false}@property --tw-gradient-from{syntax:"<color>";inherits:false;initial-value:#0000}@property --tw-gradient-via{syntax:"<color>";inherits:false;initial-value:#0000}@property --tw-gradient-to{syntax:"<color>";inherits:false;initial-value:#0000}@property --tw-gradient-stops{syntax:"*";inherits:false}@property --tw-gradient-via-stops{syntax:"*";inherits:false}@property --tw-gradient-from-position{syntax:"<length-percentage>";inherits:false;initial-value:0%}@property --tw-gradient-via-position{syntax:"<length-percentage>";inherits:false;initial-value:50%}@property --tw-gradient-to-position{syntax:"<length-percentage>";inherits:false;initial-value:100%}@property --tw-font-weight{syntax:"*";inherits:false}@property --tw-tracking{syntax:"*";inherits:false}@property --tw-ordinal{syntax:"*";inherits:false}@property --tw-slashed-zero{syntax:"*";inherits:false}@property --tw-numeric-figure{syntax:"*";inherits:false}@property --tw-numeric-spacing{syntax:"*";inherits:false}@property --tw-numeric-fraction{syntax:"*";inherits:false}@property --tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-shadow-color{syntax:"*";inherits:false}@property --tw-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-shadow-color{syntax:"*";inherits:false}@property --tw-inset-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-ring-color{syntax:"*";inherits:false}@property --tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-ring-color{syntax:"*";inherits:false}@property --tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-ring-inset{syntax:"*";inherits:false}@property --tw-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0}@property --tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-backdrop-blur{syntax:"*";inherits:false}@property --tw-backdrop-brightness{syntax:"*";inherits:false}@property --tw-backdrop-contrast{syntax:"*";inherits:false}@property --tw-backdrop-grayscale{syntax:"*";inherits:false}@property --tw-backdrop-hue-rotate{syntax:"*";inherits:false}@property --tw-backdrop-invert{syntax:"*";inherits:false}@property --tw-backdrop-opacity{syntax:"*";inherits:false}@property --tw-backdrop-saturate{syntax:"*";inherits:false}@property --tw-backdrop-sepia{syntax:"*";inherits:false}</style>
+</head>
+<body class="font-sans">
+
+<div id="app" class="isolate fixed inset-0 overflow-hidden
+                       bg-neutral-100 text-neutral-900
+                       dark:bg-neutral-950 dark:text-neutral-100">
+
+  <!-- 画布视口 -->
+  <div id="viewport" class="absolute inset-0 cursor-grab touch-none overflow-hidden">
+    <div id="canvas" class="absolute top-0 left-0 origin-top-left
+                            translate-x-(--vx) translate-y-(--vy) scale-(--vk)"></div>
+  </div>
+
+  <!-- 变体挂载点 -->
+  <div id="chromeA" class="fixed bottom-2.5 left-2.5 z-40 hidden"></div>
+  <div id="chromeB" class="fixed bottom-3.5 left-1/2 z-40 hidden -translate-x-1/2"></div>
+  <div id="radial" class="pointer-events-none fixed left-(--rx) top-(--ry) z-50 hidden"></div>
+
+  <!-- 径向回执（仅变体 C）：本原型不执行真实动作，只显示选中了什么 -->
+  <div id="radialTip" class="fixed bottom-16 left-1/2 z-40 hidden -translate-x-1/2
+       rounded-full bg-neutral-950 px-3 py-1.5 text-xs text-white shadow-lg"></div>
+
+  <!-- 原型工具：不属于被评审的设计，上线前必须移除 -->
+  <div id="switcher" class="fixed top-3.5 left-1/2 z-90 flex -translate-x-1/2
+                            items-center gap-x-2.5 rounded-full bg-neutral-950
+                            py-1.5 pr-2 pl-3.5 text-xs text-white shadow-lg"></div>
+  <div class="fixed top-3.5 right-3 z-90 rounded-full bg-white px-2.5 py-1
+              text-[0.625rem] font-semibold tracking-wide text-red-700
+              ring-1 ring-red-200
+              dark:bg-neutral-900 dark:text-red-400 dark:ring-red-900">PROTOTYPE</div>
+
+</div>
+
+<script>
+/* ===========================================================================
+   PROTOTYPE 逻辑 —— 见 src/canvas-ui.html 顶部的说明。
+   设计规则来源：~/.claude/skills/design/guidelines/
+   =========================================================================== */
+
+const ICONS = {
+ "arrow-uturn-left": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M12.5 9.75C12.5 8.23122 11.2688 7 9.75 7H4.56066L6.78033 9.21967C7.07322 9.51256 7.07322 9.98744 6.78033 10.2803C6.48744 10.5732 6.01256 10.5732 5.71967 10.2803L2.21967 6.78033C1.92678 6.48744 1.92678 6.01256 2.21967 5.71967L5.71967 2.21967C6.01256 1.92678 6.48744 1.92678 6.78033 2.21967C7.07322 2.51256 7.07322 2.98744 6.78033 3.28033L4.56066 5.5L9.75 5.5C12.0972 5.5 14 7.40279 14 9.75C14 12.0972 12.0972 14 9.75 14H8.75C8.33579 14 8 13.6642 8 13.25C8 12.8358 8.33579 12.5 8.75 12.5H9.75C11.2688 12.5 12.5 11.2688 12.5 9.75Z"
+  ]
+ },
+ "arrows-pointing-in": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M2.21967 2.21967C2.51256 1.92678 2.98744 1.92678 3.28033 2.21967L5.5 4.43934V2.75C5.5 2.33579 5.83579 2 6.25 2C6.66421 2 7 2.33579 7 2.75V6.25C7 6.66421 6.66421 7 6.25 7H2.75C2.33579 7 2 6.66421 2 6.25C2 5.83579 2.33579 5.5 2.75 5.5H4.43934L2.21967 3.28033C1.92678 2.98744 1.92678 2.51256 2.21967 2.21967ZM12.7197 2.21967C13.0126 1.92678 13.4874 1.92678 13.7803 2.21967C14.0732 2.51256 14.0732 2.98744 13.7803 3.28033L11.5607 5.5H13.25C13.6642 5.5 14 5.83579 14 6.25C14 6.66421 13.6642 7 13.25 7H9.75C9.33579 7 9 6.66421 9 6.25V2.75C9 2.33579 9.33579 2 9.75 2C10.1642 2 10.5 2.33579 10.5 2.75V4.43934L12.7197 2.21967ZM2.75 9H6.25C6.66421 9 7 9.33579 7 9.75V13.25C7 13.6642 6.66421 14 6.25 14C5.83579 14 5.5 13.6642 5.5 13.25V11.5607L3.28033 13.7803C2.98744 14.0732 2.51256 14.0732 2.21967 13.7803C1.92678 13.4874 1.92678 13.0126 2.21967 12.7197L4.43934 10.5H2.75C2.33579 10.5 2 10.1642 2 9.75C2 9.33579 2.33579 9 2.75 9ZM9 9.75C9 9.33579 9.33579 9 9.75 9H13.25C13.6642 9 14 9.33579 14 9.75C14 10.1642 13.6642 10.5 13.25 10.5H11.5607L13.7803 12.7197C14.0732 13.0126 14.0732 13.4874 13.7803 13.7803C13.4874 14.0732 13.0126 14.0732 12.7197 13.7803L10.5 11.5607V13.25C10.5 13.6642 10.1642 14 9.75 14C9.33579 14 9 13.6642 9 13.25V9.75Z"
+  ]
+ },
+ "arrows-pointing-out": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M2.75 9C3.16421 9 3.5 9.33579 3.5 9.75V11.4393L5.71967 9.21967C6.01256 8.92678 6.48744 8.92678 6.78033 9.21967C7.07322 9.51256 7.07322 9.98744 6.78033 10.2803L4.56066 12.5H6.25C6.66421 12.5 7 12.8358 7 13.25C7 13.6642 6.66421 14 6.25 14H2.75C2.33579 14 2 13.6642 2 13.25V9.75C2 9.33579 2.33579 9 2.75 9Z",
+   "M2.75 7C3.16421 7 3.5 6.66421 3.5 6.25V4.56066L5.71967 6.78033C6.01256 7.07322 6.48744 7.07322 6.78033 6.78033C7.07322 6.48744 7.07322 6.01256 6.78033 5.71967L4.56066 3.5H6.25C6.66421 3.5 7 3.16421 7 2.75C7 2.33579 6.66421 2 6.25 2H2.75C2.33579 2 2 2.33579 2 2.75V6.25C2 6.66421 2.33579 7 2.75 7Z",
+   "M13.25 9C12.8358 9 12.5 9.33579 12.5 9.75V11.4393L10.2803 9.21967C9.98744 8.92678 9.51256 8.92678 9.21967 9.21967C8.92678 9.51256 8.92678 9.98744 9.21967 10.2803L11.4393 12.5H9.75C9.33579 12.5 9 12.8358 9 13.25C9 13.6642 9.33579 14 9.75 14H13.25C13.6642 14 14 13.6642 14 13.25V9.75C14 9.33579 13.6642 9 13.25 9Z",
+   "M13.25 7C12.8358 7 12.5 6.66421 12.5 6.25V4.56066L10.2803 6.78033C9.98744 7.07322 9.51256 7.07322 9.21967 6.78033C8.92678 6.48744 8.92678 6.01256 9.21967 5.71967L11.4393 3.5H9.75C9.33579 3.5 9 3.16421 9 2.75C9 2.33579 9.33579 2 9.75 2H13.25C13.6642 2 14 2.33579 14 2.75V6.25C14 6.66421 13.6642 7 13.25 7Z"
+  ]
+ },
+ "chevron-left": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M9.78033 4.21967C10.0732 4.51256 10.0732 4.98744 9.78033 5.28033L7.06066 8L9.78033 10.7197C10.0732 11.0126 10.0732 11.4874 9.78033 11.7803C9.48744 12.0732 9.01256 12.0732 8.71967 11.7803L5.46967 8.53033C5.17678 8.23744 5.17678 7.76256 5.46967 7.46967L8.71967 4.21967C9.01256 3.92678 9.48744 3.92678 9.78033 4.21967Z"
+  ]
+ },
+ "chevron-right": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M6.21967 4.21967C6.51256 3.92678 6.98744 3.92678 7.28033 4.21967L10.5303 7.46967C10.8232 7.76256 10.8232 8.23744 10.5303 8.53033L7.28033 11.7803C6.98744 12.0732 6.51256 12.0732 6.21967 11.7803C5.92678 11.4874 5.92678 11.0126 6.21967 10.7197L8.93934 8L6.21967 5.28033C5.92678 4.98744 5.92678 4.51256 6.21967 4.21967Z"
+  ]
+ },
+ "ellipsis-horizontal": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M2 8C2 7.17157 2.67157 6.5 3.5 6.5C4.32843 6.5 5 7.17157 5 8C5 8.82843 4.32843 9.5 3.5 9.5C2.67157 9.5 2 8.82843 2 8Z",
+   "M6.5 8C6.5 7.17157 7.17157 6.5 8 6.5C8.82843 6.5 9.5 7.17157 9.5 8C9.5 8.82843 8.82843 9.5 8 9.5C7.17157 9.5 6.5 8.82843 6.5 8Z",
+   "M12.5 6.5C11.6716 6.5 11 7.17157 11 8C11 8.82843 11.6716 9.5 12.5 9.5C13.3284 9.5 14 8.82843 14 8C14 7.17157 13.3284 6.5 12.5 6.5Z"
+  ]
+ },
+ "hand-raised": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M8.5 1C8.08579 1 7.75 1.33579 7.75 1.75V6.5C7.75 6.77614 7.52614 7 7.25 7C6.97386 7 6.75 6.77614 6.75 6.5V2.75C6.75 2.33579 6.41421 2 6 2C5.58579 2 5.25 2.33579 5.25 2.75V7.5C5.25 7.77614 5.02614 8 4.75 8C4.47386 8 4.25 7.77614 4.25 7.5V4.75C4.25 4.33579 3.91421 4 3.5 4C3.08579 4 2.75 4.33579 2.75 4.75V9.25C2.75 12.4256 5.32436 15 8.5 15C11.6756 15 14.25 12.4256 14.25 9.25V6.75C14.25 6.33579 13.9142 6 13.5 6C13.0858 6 12.75 6.33579 12.75 6.75V9.5C12.75 9.77614 12.5261 10 12.25 10C11.9739 10 11.75 9.77614 11.75 9.5V2.75C11.75 2.33579 11.4142 2 11 2C10.5858 2 10.25 2.33579 10.25 2.75V6.5C10.25 6.77614 10.0261 7 9.75 7C9.47386 7 9.25 6.77614 9.25 6.5V1.75C9.25 1.33579 8.91421 1 8.5 1Z"
+  ]
+ },
+ "magnifying-glass-minus": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M8.75 6.25L5.25 6.25C4.83579 6.25 4.5 6.58579 4.5 7C4.5 7.41421 4.83579 7.75 5.25 7.75L8.75 7.75C9.16421 7.75 9.5 7.41421 9.5 7C9.5 6.58579 9.16421 6.25 8.75 6.25Z",
+   "M7 12C8.11014 12 9.13578 11.6382 9.96544 11.0261L12.7197 13.7803C13.0126 14.0732 13.4874 14.0732 13.7803 13.7803C14.0732 13.4874 14.0732 13.0126 13.7803 12.7197L11.0261 9.96544C11.6382 9.13578 12 8.11014 12 7C12 4.23858 9.76142 2 7 2C4.23858 2 2 4.23858 2 7C2 9.76142 4.23858 12 7 12ZM7 10.5C8.933 10.5 10.5 8.933 10.5 7C10.5 5.067 8.933 3.5 7 3.5C5.067 3.5 3.5 5.067 3.5 7C3.5 8.933 5.067 10.5 7 10.5Z"
+  ]
+ },
+ "magnifying-glass-plus": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M6.25 8.75V7.75H5.25C4.83579 7.75 4.5 7.41421 4.5 7C4.5 6.58579 4.83579 6.25 5.25 6.25L6.25 6.25V5.25C6.25 4.83579 6.58579 4.5 7 4.5C7.41421 4.5 7.75 4.83579 7.75 5.25V6.25H8.75C9.16421 6.25 9.5 6.58579 9.5 7C9.5 7.41421 9.16421 7.75 8.75 7.75H7.75V8.75C7.75 9.16421 7.41421 9.5 7 9.5C6.58579 9.5 6.25 9.16421 6.25 8.75Z",
+   "M7 12C8.11014 12 9.13578 11.6382 9.96544 11.0261L12.7197 13.7803C13.0126 14.0732 13.4874 14.0732 13.7803 13.7803C14.0732 13.4874 14.0732 13.0126 13.7803 12.7197L11.0261 9.96544C11.6382 9.13578 12 8.11014 12 7C12 4.23858 9.76142 2 7 2C4.23858 2 2 4.23858 2 7C2 9.76142 4.23858 12 7 12ZM7 10.5C8.933 10.5 10.5 8.933 10.5 7C10.5 5.067 8.933 3.5 7 3.5C5.067 3.5 3.5 5.067 3.5 7C3.5 8.933 5.067 10.5 7 10.5Z"
+  ]
+ },
+ "pencil": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M11.0126 2.51256C11.696 1.82915 12.804 1.82915 13.4875 2.51256C14.1709 3.19598 14.1709 4.30402 13.4875 4.98744L6.22604 12.2489C5.97066 12.5042 5.66748 12.7068 5.33382 12.845L3.28702 13.6928C3.00676 13.8088 2.68417 13.7447 2.46968 13.5302C2.25519 13.3157 2.19103 12.9931 2.30712 12.7128L3.15488 10.6663C3.29308 10.3327 3.49563 10.0295 3.75098 9.77417L11.0126 2.51256Z"
+  ]
+ },
+ "plus": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M8.75 3.75C8.75 3.33579 8.41421 3 8 3C7.58579 3 7.25 3.33579 7.25 3.75V7.25H3.75C3.33579 7.25 3 7.58579 3 8C3 8.41421 3.33579 8.75 3.75 8.75L7.25 8.75V12.25C7.25 12.6642 7.58579 13 8 13C8.41421 13 8.75 12.6642 8.75 12.25V8.75L12.25 8.75C12.6642 8.75 13 8.41421 13 8C13 7.58579 12.6642 7.25 12.25 7.25H8.75V3.75Z"
+  ]
+ },
+ "scissors": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M2.24907 6.66508C3.21872 7.22491 4.40749 7.06135 5.19051 6.34186L5.54878 6.54871C5.88961 6.74549 6.32588 6.56942 6.5193 6.22668C6.70926 5.89005 6.63407 5.44325 6.29933 5.24999L5.94017 5.04262C6.17108 4.00514 5.71831 2.89455 4.74907 2.33496C3.55334 1.6446 2.02437 2.05429 1.33401 3.25002C0.643655 4.44575 1.05334 5.97473 2.24907 6.66508ZM4.3651 5.00002C4.08896 5.47831 3.47737 5.64219 2.99907 5.36605C2.52078 5.0899 2.35691 4.47831 2.63305 4.00002C2.90919 3.52173 3.52078 3.35785 3.99907 3.634C4.47737 3.91014 4.64124 4.52173 4.3651 5.00002Z",
+   "M8.9027 5.46455C8.03172 5.75919 7.36561 6.46964 7.12764 7.35778L6.75302 8.75586L5.19038 9.65805C4.40736 8.93867 3.21866 8.77517 2.24907 9.33496C1.05334 10.0253 0.643655 11.5543 1.33401 12.75C2.02437 13.9458 3.55334 14.3554 4.74907 13.6651C5.71837 13.1055 6.17114 11.9948 5.94013 10.9572L14.7003 5.89957C14.963 5.74789 15.1084 5.4529 15.0688 5.15215C15.0293 4.8514 14.8124 4.60412 14.5194 4.5256L13.7383 4.31631C13.2139 4.17579 12.6596 4.19364 12.1453 4.36762L8.9027 5.46455ZM4.3651 11C4.64124 11.4783 4.47737 12.0899 3.99907 12.366C3.52078 12.6422 2.90919 12.4783 2.63305 12C2.35691 11.5217 2.52078 10.9101 2.99907 10.634C3.47737 10.3579 4.08896 10.5217 4.3651 11Z",
+   "M8.89243 10.4082C8.83956 10.4387 8.84545 10.5161 8.90328 10.5356L12.1459 11.6325C12.6601 11.8065 13.2144 11.8244 13.7388 11.6839L14.52 11.4746C14.813 11.3961 15.0298 11.1488 15.0694 10.848C15.109 10.5473 14.9635 10.2523 14.7008 10.1006L12.563 8.86634C12.2536 8.68771 11.8724 8.68771 11.563 8.86634L8.89243 10.4082Z"
+  ]
+ },
+ "x-mark": {
+  "viewBox": "0 0 16 16",
+  "paths": [
+   "M5.28033 4.21967C4.98744 3.92678 4.51256 3.92678 4.21967 4.21967C3.92678 4.51256 3.92678 4.98744 4.21967 5.28033L6.93934 8L4.21967 10.7197C3.92678 11.0126 3.92678 11.4874 4.21967 11.7803C4.51256 12.0732 4.98744 12.0732 5.28033 11.7803L8 9.06066L10.7197 11.7803C11.0126 12.0732 11.4874 12.0732 11.7803 11.7803C12.0732 11.4874 12.0732 11.0126 11.7803 10.7197L9.06066 8L11.7803 5.28033C12.0732 4.98744 12.0732 4.51256 11.7803 4.21967C11.4874 3.92678 11.0126 3.92678 10.7197 4.21967L8 6.93934L5.28033 4.21967Z"
+  ]
+ }
+};
+
+/* ---------- 图标 ----------
+   icons.md：不手搓 SVG，一律来自官方 Heroicons Micro（16px → size-4）；
+   实心图标用 fill-*，不用 text-* + currentColor。 */
+function icon(name, cls = "icon-glyph") {
+  const i = ICONS[name];
+  if (!i) throw new Error("unknown icon: " + name);
+  const paths = i.paths.map((d) => `<path d="${d}"/>`).join("");
+  return `<svg viewBox="${i.viewBox}" aria-hidden="true" class="${cls}">${paths}</svg>`;
+}
+
+/* buttons.md：图标按钮，两种尺寸（28px / 36px，差 8px ≥ 6px）；
+   48×48 命中区由 hit-expand 在粗指针设备上补足 */
+function iconBtn(name, label, size = "sm", btnExtra = "", glyphCls = "icon-glyph") {
+  const dim = size === "sm" ? "size-7" : "size-9";
+  return `<button type="button" title="${label}" aria-label="${label}"
+    class="icon-btn group ${dim} hover:bg-neutral-950/5 dark:hover:bg-white/10 ${btnExtra}">
+    ${icon(name, glyphCls)}<span class="hit-expand" aria-hidden="true"></span></button>`;
+}
+
+/* ---------- 变体定义：结构差异，不是换皮 ---------- */
+const VARIANTS = {
+  A: { name: "角落裸图标", note: "无容器 · 28px · 常驻但不占面" },
+  B: { name: "底部细条", note: "有容器 · 28px · 参考授课界面" },
+  C: { name: "全净 + 径向", note: "常态零控件 · 长按唤出 · 细线选中" },
+};
+const ORDER = ["A", "B", "C"];
+
+/* ---------- 示例内容 ----------
+   标题与选项用真字；正文用灰条代表原始资料的裁切位图。 */
+const REGIONS = [
+  { id: "q1", kind: "题", x: 0, y: 0, w: 460, h: 250,
+    title: "1. 下列说法正确的是（　）",
+    opts: ["A. 物体速度为零时加速度一定为零",
+           "B. 加速度减小时速度一定减小",
+           "C. 速度变化越快加速度越大",
+           "D. 加速度方向与速度方向总是相同"] },
+  { id: "q2", kind: "题", x: 500, y: 0, w: 460, h: 250,
+    title: "2. 如图所示，物块沿斜面下滑（　）",
+    bars: ["w-[90%]", "w-[75%]", "w-[60%]"] },
+  { id: "fig", kind: "图", x: 1000, y: 0, w: 300, h: 250, figure: true },
+  { id: "q3", kind: "题", x: 0, y: 300, w: 700, h: 220,
+    title: "3. 计算题：求物块在 3s 内通过的位移",
+    bars: ["w-[90%]", "w-[75%]", "w-[60%]", "w-[45%]"] },
+  { id: "ans", kind: "答", x: 750, y: 300, w: 550, h: 220,
+    title: "参考答案", opts: ["1. C　　2. B　　3. 4.5 m"] },
+  { id: "note", kind: "说明", x: 0, y: 570, w: 400, h: 150,
+    title: "本卷说明", bars: ["w-[90%]", "w-[75%]"] },
+];
+
+/* ---------- 画布状态（纯内存，ADR-0005） ---------- */
+const viewport = document.getElementById("viewport");
+const canvasEl = document.getElementById("canvas");
+const radialEl = document.getElementById("radial");
+const view = { x: 90, y: 108, k: 1 };
+let selected = null;
+let current = "A";
+const regionEls = new Map();
+
+/* general.md：动态值优先走 CSS 变量，而不是直接写死 style 属性 */
+function applyView() {
+  canvasEl.style.setProperty("--vx", view.x + "px");
+  canvasEl.style.setProperty("--vy", view.y + "px");
+  canvasEl.style.setProperty("--vk", view.k);
+}
+function setZoomLabel() {
+  const z = document.getElementById("zoomLabel");
+  if (z) z.textContent = Math.round(view.k * 100) + "%";
+}
+
+/* ---------- 区域渲染 ---------- */
+const HANDLE_POS = {
+  nw: "-top-1.5 -left-1.5 cursor-nwse-resize",
+  ne: "-top-1.5 -right-1.5 cursor-nesw-resize",
+  sw: "-bottom-1.5 -left-1.5 cursor-nesw-resize",
+  se: "-bottom-1.5 -right-1.5 cursor-nwse-resize",
+};
+
+function regionMarkup(r) {
+  const bars = (r.bars || [])
+    .map((w) => `<div class="my-1.5 h-1.5 ${w} rounded-sm bg-neutral-950/10 dark:bg-white/10"></div>`)
+    .join("");
+  const opts = (r.opts || [])
+    .map((t) => `<p class="text-pretty text-sm text-neutral-600 dark:text-neutral-400">${t}</p>`)
+    .join("");
+  const body = r.figure
+    ? `<div class="h-full rounded-md bg-neutral-950/5 ring-1 ring-neutral-950/5
+         dark:bg-white/5 dark:ring-white/10"></div>`
+    : `<p class="mb-2 text-balance text-sm font-semibold">${r.title}</p>${opts}${bars}`;
+
+  const handles = Object.entries(HANDLE_POS)
+    .map(([pos, cls]) =>
+      `<span data-handle="${pos}" class="absolute hidden size-3.5 rounded-sm bg-white
+        ring-1 ring-emerald-600 dark:bg-neutral-900 ${cls}"></span>`)
+    .join("");
+
+  return `<div data-id="${r.id}" class="region absolute left-(--x) top-(--y) w-(--w) h-(--h)
+    rounded-(--radius) bg-white shadow-xs ring-1 ring-neutral-950/10
+    dark:bg-neutral-900 dark:shadow-none dark:inset-ring dark:inset-ring-white/5">
+    <div class="relative overflow-hidden rounded-(--radius)">
+      <span class="absolute top-0 left-0 rounded-br-md bg-neutral-950/5 px-1.5 py-0.5
+        text-xs font-medium text-neutral-600
+        dark:bg-white/10 dark:text-neutral-300">${r.kind}</span>
+      <div class="p-3 pt-7 ${r.figure ? "h-full" : ""}">${body}</div>
+    </div>${handles}</div>`;
+}
+
+function buildRegions() {
+  for (const r of REGIONS) {
+    const host = document.createElement("div");
+    host.innerHTML = regionMarkup(r);
+    const el = host.firstElementChild;
+    el.style.setProperty("--x", r.x + "px");
+    el.style.setProperty("--y", r.y + "px");
+    el.style.setProperty("--w", r.w + "px");
+    el.style.setProperty("--h", r.h + "px");
+    canvasEl.appendChild(el);
+    regionEls.set(r.id, el);
+  }
+}
+
+function setRegionBox(r) {
+  const el = regionEls.get(r.id);
+  el.style.setProperty("--x", r.x + "px");
+  el.style.setProperty("--y", r.y + "px");
+  el.style.setProperty("--w", r.w + "px");
+  el.style.setProperty("--h", r.h + "px");
+}
+
+/* 选中态：1px 中性环 → 2px 强调环；变体 C 用细线代替手柄 */
+function setSelected(id) {
+  for (const [k, el] of regionEls) {
+    const on = k === id;
+    el.classList.toggle("ring-2", on);
+    el.classList.toggle("ring-emerald-600", on);
+    el.classList.toggle("ring-1", !on);
+    el.classList.toggle("ring-neutral-950/10", !on);
+    el.classList.toggle("outline-2", on && current === "C");
+    el.classList.toggle("outline-emerald-600", on && current === "C");
+    el.querySelectorAll("[data-handle]").forEach((h) =>
+      h.classList.toggle("hidden", !on || current === "C"));
+  }
+  selected = id;
+}
+
+/* ---------- 变体 A：角落裸图标（无容器，ghost 按钮） ---------- */
+function buildChromeA() {
+  const host = document.getElementById("chromeA");
+  host.innerHTML = `<div class="flex flex-col gap-y-1">${
+    ["hand-raised:移动", "scissors:裁切", "plus:添加",
+     "arrow-uturn-left:撤销", "ellipsis-horizontal:更多"]
+      .map((s) => iconBtn(...s.split(":"))).join("")}</div>`;
+}
+
+/* ---------- 变体 B：底部细条 ---------- */
+function buildChromeB() {
+  const host = document.getElementById("chromeB");
+  /* border-radius.md：容器声明 --radius/--padding，内部 calc 推出同心圆角
+     navigation.md：横向菜单不得溢出父容器 → overflow-x-auto */
+  const bar = `<div class="flex max-w-[calc(100dvw-1.5rem)] items-center gap-x-0.5
+    overflow-x-auto rounded-(--radius) bg-white/85 p-(--padding) shadow-sm
+    ring-1 ring-neutral-950/10 backdrop-blur-sm
+    dark:bg-neutral-900/85 dark:shadow-none dark:ring-white/10
+    [--radius:var(--radius-xl)] [--padding:--spacing(1.5)]">
+    ${["arrows-pointing-out:全屏", "hand-raised:移动", "scissors:裁切",
+       "plus:添加", "arrow-uturn-left:撤销", "ellipsis-horizontal:更多"]
+      .map((s) => iconBtn(...s.split(":"))).join("")}
+    <span class="mx-1 h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15"></span>
+    <span class="flex shrink-0 items-center gap-x-0.5 px-1 tabular-nums text-sm
+      text-neutral-600 dark:text-neutral-400">
+      ${iconBtn("magnifying-glass-minus", "缩小")}
+      <span id="zoomLabel" class="min-w-9 text-center">100%</span>
+      ${iconBtn("magnifying-glass-plus", "放大")}
+    </span></div>`;
+  host.innerHTML = bar;
+}
+
+/* ---------- 变体 C：长按径向 ---------- */
+const RADIAL_ITEMS = [
+  ["scissors", "裁切", -90], ["hand-raised", "移动", -18],
+  ["plus", "添加", 54], ["arrows-pointing-in", "适应", 126],
+  ["arrow-uturn-left", "撤销", 198],
+];
+const RADIAL_R = 96;
+const RADIAL_DEAD = 18;      /* 中心死区：小于此距离不选中任何楔子（取消手势） */
+const LOCK_SLOP = 8;         /* 长按期间的抖动容差：位移不超过它就不算「在拖」 */
+let radialTimer = null, radialArmed = false, hotWedge = null;
+let radialOrigin = { x: 0, y: 0 };
+let radialLock = { x: 0, y: 0 };
+let panActive = false;
+
+function armRadial(p) {
+  clearTimeout(radialTimer);
+  radialTimer = setTimeout(() => showRadial(p), 280);
+}
+
+function cancelRadialArm() {
+  clearTimeout(radialTimer);
+  radialTimer = null;
+}
+
+function showRadial(p) {
+  radialArmed = true; radialOrigin = p; hotWedge = null; radialTimer = null;
+  const wedges = RADIAL_ITEMS.map(([ico, label, deg]) => {
+    const a = (deg * Math.PI) / 180;
+    const wx = Math.cos(a) * RADIAL_R, wy = Math.sin(a) * RADIAL_R;
+    /* interactivity.md：过渡动画只给位移/变换，颜色变化不加
+       （注意别把类名字面量写进注释——Tailwind 扫描器会照字面编译出死规则） */
+    return `<span data-deg="${deg}" data-label="${label}" style="--wx:${wx}px;--wy:${wy}px"
+      class="absolute top-1/2 left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2
+      translate-x-(--wx) translate-y-(--wy) place-items-center rounded-full
+      bg-white shadow-sm ring-1 ring-neutral-950/10
+      dark:bg-neutral-800 dark:shadow-none dark:ring-white/10">
+      ${icon(ico, "size-4 shrink-0 fill-neutral-600 dark:fill-neutral-300")}</span>`;
+  }).join("");
+  radialEl.innerHTML = `<span class="absolute top-1/2 left-1/2 grid size-8
+    -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-neutral-950
+    shadow-lg">${icon("x-mark", "size-4 shrink-0 fill-white")}</span>${wedges}`;
+  radialEl.style.setProperty("--rx", p.x + "px");
+  radialEl.style.setProperty("--ry", p.y + "px");
+  radialEl.classList.remove("hidden");
+  radialEl.classList.add("block");
+}
+
+function hideRadial() {
+  radialArmed = false; hotWedge = null;
+  radialEl.classList.add("hidden");
+  radialEl.classList.remove("block");
+}
+
+/* 按方向挑最近扇区——以菜单中心为圆心，不依赖元素自身的 clickable 区域 */
+function wedgeByDirection(dx, dy) {
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  let best = null, bestDelta = Infinity;
+  radialEl.querySelectorAll("[data-deg]").forEach((w) => {
+    let delta = Math.abs(((Number(w.dataset.deg) - deg + 540) % 360) - 180);
+    if (delta < bestDelta) { bestDelta = delta; best = w; }
+  });
+  return best;
+}
+
+function highlightWedge(dx, dy) {
+  const best = wedgeByDirection(dx, dy);
+  if (best !== hotWedge) {
+    if (hotWedge) hotWedge.classList.remove("bg-emerald-600");
+    if (best) best.classList.add("bg-emerald-600");
+    hotWedge = best;
+  }
+}
+
+/* 本原型不实现真实动作，只回执选中了什么，便于现场判断手感 */
+function commitWedge(dx, dy) {
+  const w = wedgeByDirection(dx, dy);
+  if (!w) return;
+  const tip = document.getElementById("radialTip");
+  if (tip) { tip.textContent = "径向选中：" + w.dataset.label; tip.classList.remove("hidden"); }
+}
+
+/* ---------- 指针交互 ---------- */
+const pointers = new Map();
+let mode = null, drag = null, pinchStart = null;
+const toCanvas = (p) => ({ x: (p.x - view.x) / view.k, y: (p.y - view.y) / view.k });
+
+viewport.addEventListener("pointerdown", (e) => {
+  if (e.target.closest("#switcher, #chromeA, #chromeB, #radial")) return;
+  viewport.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchStart = { dist: Math.hypot(a.x - b.x, a.y - b.y), k: view.k };
+    mode = "pinch"; return;
+  }
+
+  const handle = e.target.closest("[data-handle]");
+  const regionEl = e.target.closest(".region");
+
+  if (handle && regionEl) {
+    const r = REGIONS.find((q) => q.id === regionEl.dataset.id);
+    drag = { id: r.id, kind: "resize", pos: handle.dataset.handle,
+             sx: r.x, sy: r.y, sw: r.w, sh: r.h, px: e.clientX, py: e.clientY };
+    mode = "resize"; setSelected(r.id); return;
+  }
+  if (regionEl) {
+    const r = REGIONS.find((q) => q.id === regionEl.dataset.id);
+    const p = toCanvas({ x: e.clientX, y: e.clientY });
+    drag = { id: r.id, kind: "drag", sx: r.x, sy: r.y, px: p.x, py: p.y };
+    mode = "drag"; setSelected(r.id); return;
+  }
+
+  if (current === "C") {
+    /* 长按唤出径向：与平移是同一根手指，所以必须等到动了才取消计时。
+       抖动容差 LOCK_SLOP 之内的位移不算「移动」。 */
+    const p = { x: e.clientX, y: e.clientY };
+    radialLock = { x: p.x, y: p.y };
+    armRadial(p);
+  }
+  mode = "pan";
+  drag = { kind: "pan", vx: view.x, vy: view.y, px: e.clientX, py: e.clientY };
+  setSelected(null);
+  viewport.classList.add("cursor-grabbing");
+});
+
+viewport.addEventListener("pointermove", (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (mode === "pinch" && pointers.size >= 2 && pinchStart) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2,
+      Math.min(4, Math.max(0.15, pinchStart.k * (d / pinchStart.dist))));
+    return;
+  }
+
+  /* 径向已唤出：以菜单中心为圆心做方向选择，忽略全局坐标的抖动 */
+  if (radialArmed) {
+    const dx = e.clientX - radialOrigin.x;
+    const dy = e.clientY - radialOrigin.y;
+    if (Math.hypot(dx, dy) >= RADIAL_DEAD) highlightWedge(dx, dy);
+    return;
+  }
+
+  if (mode === "pan" && drag) {
+    /* 只有在超过抖动容差时才算真的在平移；之前一直等长按计时 */
+    if (!panActive) {
+      const moved = Math.hypot(e.clientX - radialLock.x, e.clientY - radialLock.y);
+      if (moved < LOCK_SLOP) return;      /* 还没动，让长按计时继续跑 */
+      cancelRadialArm();                   /* 真的在拖了，长按作废 */
+      panActive = true;
+    }
+    view.x = drag.vx + (e.clientX - drag.px);
+    view.y = drag.vy + (e.clientY - drag.py);
+    applyView();
+    return;
+  }
+  if (mode === "drag" && drag) {
+    const p = toCanvas({ x: e.clientX, y: e.clientY });
+    const r = REGIONS.find((q) => q.id === drag.id);
+    r.x = drag.sx + (p.x - drag.px);
+    r.y = drag.sy + (p.y - drag.py);
+    setRegionBox(r); return;
+  }
+  if (mode === "resize" && drag) {
+    const r = REGIONS.find((q) => q.id === drag.id);
+    const dx = (e.clientX - drag.px) / view.k;
+    const dy = (e.clientY - drag.py) / view.k;
+    const { sx, sy, sw, sh, pos } = drag;
+    if (pos.includes("e")) r.w = Math.max(60, sw + dx); else r.w = sw;
+    if (pos.includes("s")) r.h = Math.max(50, sh + dy); else r.h = sh;
+    if (pos.includes("w")) { r.w = Math.max(60, sw - dx); r.x = sx + (sw - r.w); } else r.x = sx;
+    if (pos.includes("n")) { r.h = Math.max(50, sh - dy); r.y = sy + (sh - r.h); } else r.y = sy;
+    setRegionBox(r); return;
+  }
+});
+
+function endPointer(e) {
+  if (radialArmed) {
+    /* 提交当前高亮的楔子（若指针正落在某个楔子上） */
+    const dx = e.clientX - radialOrigin.x;
+    const dy = e.clientY - radialOrigin.y;
+    if (Math.hypot(dx, dy) >= RADIAL_DEAD) commitWedge(dx, dy);
+    hideRadial();
+  }
+  cancelRadialArm();
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchStart = null;
+  if (pointers.size === 0) {
+    mode = null; drag = null; panActive = false;
+    viewport.classList.remove("cursor-grabbing");
+  }
+}
+viewport.addEventListener("pointerup", endPointer);
+viewport.addEventListener("pointercancel", endPointer);
+
+viewport.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY,
+    Math.min(4, Math.max(0.15, view.k * Math.exp(-e.deltaY * 0.0015))));
+}, { passive: false });
+
+function zoomAt(cx, cy, k) {
+  const p = toCanvas({ x: cx, y: cy });
+  view.k = k;
+  view.x = cx - p.x * k;
+  view.y = cy - p.y * k;
+  applyView();
+  setZoomLabel();
+}
+
+viewport.addEventListener("dblclick", (e) => {
+  if (e.target.closest(".region")) return;
+  const k = Math.min(viewport.clientWidth / 1400, viewport.clientHeight / 900);
+  view.k = k;
+  view.x = (viewport.clientWidth - 1400 * k) / 2;
+  view.y = (viewport.clientHeight - 900 * k) / 2;
+  applyView();
+  setZoomLabel();
+});
+
+/* ---------- 变体切换 ---------- */
+function setVariant(v) {
+  current = VARIANTS[v] ? v : "A";
+  document.getElementById("chromeA").classList.toggle("hidden", current !== "A");
+  document.getElementById("chromeB").classList.toggle("hidden", current !== "B");
+  if (current !== "C") hideRadial();
+
+  const m = VARIANTS[current];
+  document.getElementById("vname").textContent = current;
+  document.getElementById("vnote").textContent = m.name + " · " + m.note;
+
+  setSelected(selected);
+  setZoomLabel();
+
+  const url = new URL(location.href);
+  url.searchParams.set("variant", current);
+  history.replaceState(null, "", url);
+}
+
+function step(d) {
+  const i = ORDER.indexOf(current);
+  setVariant(ORDER[(i + d + ORDER.length) % ORDER.length]);
+}
+
+function buildSwitcher() {
+  /* 原型工具：不属于被评审的设计，故意用高对比黑胶囊把它和页面区分开 */
+  const nav = "bg-white/10 text-white hover:bg-white/25 dark:bg-white/10";
+  document.getElementById("switcher").innerHTML =
+    `${iconBtn("chevron-left", "上一个变体", "sm", nav, "size-4 shrink-0 fill-white")}
+     <span class="whitespace-nowrap"><b id="vname" class="font-semibold">A</b>
+     <span id="vnote" class="text-neutral-400"></span></span>
+     ${iconBtn("chevron-right", "下一个变体", "sm", nav, "size-4 shrink-0 fill-white")}`;
+  const btns = document.getElementById("switcher").querySelectorAll("button");
+  btns.forEach((b, i) => (b.onclick = () => step(i === 0 ? -1 : 1)));
+}
+
+addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+
+/* ---------- 启动 ---------- */
+buildRegions();
+buildChromeA();
+buildChromeB();
+buildSwitcher();
+applyView();
+setVariant(new URLSearchParams(location.search).get("variant") || "A");
+
+</script>
+</body>
+</html>
