@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import { Canvas } from "./Canvas";
 import { ingestFiles, ingestToast, movedCount, readyScene } from "./model";
-import type { Board, Scene, View } from "./model";
+import type { Board, Bounds, Scene, View } from "./model";
 import { PATHS, PATH_KEYS } from "./paths";
 import { Glyph, IconButton, Icons, TextButton } from "./ui";
 
@@ -90,7 +90,7 @@ export default function App() {
       bounds: boundsOf(r, v),
     };
   };
-  const boundsOf = (r: DOMRect, v: View) => ({
+  const boundsOf = (r: DOMRect, v: View): Bounds => ({
     minX: -v.x / v.k,
     minY: -v.y / v.k,
     maxX: (r.width - v.x) / v.k,
@@ -100,7 +100,8 @@ export default function App() {
   const ingest = useCallback(async (files: FileList | null, at?: { x: number; y: number }) => {
     const list = [...(files ?? [])];
     if (!list.length) return;
-    /* 内容锚在松手那一刻的光标上，并收拢进可见区域。相机不动。 */
+    /* 内容锚在松手那一刻的光标上，多份依次向右下角摊开，整叠收拢进
+       可见区域。相机不动。 */
     const { x, y, bounds } = anchorAt(at);
     const ing = await ingestFiles(list, { x, y }, bounds);
     if (!ing.regions.length) {
@@ -109,7 +110,20 @@ export default function App() {
       setScene((s) => ({ ...s, screen: "rejected", toast: ingestToast(ing) }));
       return;
     }
-    setScene(readyScene(ing.regions, ingestToast(ing)));
+    setScene((s) => {
+      /* 画布上已经有东西时，新投的**接着摊**，不把原来那批抹掉。
+         补投漏掉的一份是常见动作，抹掉等于逼人从头再来一遍。 */
+      const has = s.board.regions.length > 0;
+      return {
+        ...(has ? s : readyScene(ing.regions, "")),
+        board: {
+          ...s.board,
+          regions: has ? [...s.board.regions, ...ing.regions] : ing.regions,
+          badges: true,
+        },
+        toast: ingestToast(ing),
+      };
+    });
   }, []);
 
   const onDrop = (e: DragEvent) => {
