@@ -11,7 +11,9 @@
   常用操作要靠近手指自然落点，细节见下面「UI 约束」
 - 资源一律**先栅格化成位图再看**：不读 PDF 文字层、不解析 DOCX 结构，
   区域永远是裁切位图（[ADR-0008](docs/adr/0008-image-only-rasterize-first.md)）
-- 不是纯静态应用：AI 调用和资源处理都在服务端
+- **首版只收图片与 PDF**，栅格化在服务端用 PyMuPDF 完成；DOCX 推迟
+  （[ADR-0009](docs/adr/0009-rasterize-server-side-pdf-images-only.md)）
+- 不是纯静态应用：AI 调用和资源处理都在服务端，**需要后端**（不是纯 SPA）
 
 ## 术语
 
