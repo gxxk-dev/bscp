@@ -27,12 +27,11 @@ export function Canvas(props: {
   fitNonce: number;
   interactive: boolean;
   onBoard: (b: Board) => void;
-  onSelect: (id: string | null) => void;
   /** 当前视野。App 用它把新投放的内容放到操作者正在看的地方，
       而不是画布原点——相机不动，东西自己过来。 */
   onViewChange?: (v: View) => void;
 }) {
-  const { board, zoom, fill, fitNonce, interactive, onBoard, onSelect, onViewChange } = props;
+  const { board, zoom, fill, fitNonce, interactive, onBoard, onViewChange } = props;
   const vp = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   /** 取当前两指的坐标；不足两指返回 null */
@@ -49,7 +48,9 @@ export function Canvas(props: {
   const pinch = useRef<{ dist: number; k: number } | null>(null);
   const [grabbing, setGrabbing] = useState(false);
   /* 正在被拖的块。拿起来要看得出来——没有这一层，手指和眼睛对不上，
-     「手感」就无从谈起。不用缩放：缩放会让块的边跟着动，落点反而变难瞄。 */
+     「手感」就无从谈起。不用 z-10：层次已经由 board.regions 的顺序
+     管住了（拿起即前移），这里再叠一套 z-index 就是同一个属性两套真相，
+     迟早又出现「松手掉回底层」那种前后不一。 */
   const [lift, setLift] = useState<string[]>([]);
 
   /* ---------- 相机 ----------
@@ -115,12 +116,29 @@ export function Canvas(props: {
         kind: "drag", start: p, from: view,
         parts: parts.map((q) => ({ id: q.id, x: q.x, y: q.y })),
       };
-      onSelect(r.id);
+      /* 拿起哪一块，哪一块就前移，而且**留着**。
+         层次就是 board.regions 的渲染顺序，所以把这几块挪到数组末尾
+         就是抬到最上层——写在模型里，不写在 CSS 里。
+
+         早先只有拖动期间的一句 z-10，松手就撤：块按下去浮起来，一松
+         又沉回原来的层次，底下压着的还是刚才那块。看着像橡皮筋回弹，
+         实际上手已经把它放到上面去了，两者对不上，下一次拖别的块时
+         视觉上就错了。层次要么不临时变，要么别变。
+
+         选中写进同一次 onBoard。早先选中走的是第二条通道 onSelect，
+         而它读的是本次事件之前的 board 快照——同一点击里后写的把先
+         写的重排整个盖掉，层次于是纹丝不动。 */
+      const ids = new Set(parts.map((q) => q.id));
+      onBoard({
+        ...board,
+        selected: r.id,
+        regions: [...board.regions.filter((q) => !ids.has(q.id)), ...parts],
+      });
       setLift(parts.map((q) => q.id));
       return;
     }
     drag.current = { kind: "pan", start: { x: e.clientX, y: e.clientY }, from: view, parts: [] };
-    onSelect(null);
+    onBoard({ ...board, selected: null });
     setGrabbing(true);
   }
 
@@ -146,8 +164,8 @@ export function Canvas(props: {
     const p = toCanvas(e.clientX, e.clientY);
     const dx = p.x - g.start.x, dy = p.y - g.start.y;
     /* 一次算清整组的位移再落盘，逐块累加的话组里第二块会吃到第一块
-       刚写进去的坐标，拖得越多偏得越远。顺序保持不变——区域的绘制
-       顺序要跟着模型走，不能因为谁被拖过就重排。 */
+       刚写进去的坐标，拖得越多偏得越远。层次在拿起时就定了（见
+       onPointerDown），拖动过程只改坐标，不再动顺序。 */
     const shift = new Map(g.parts.map((q) => [q.id, { x: q.x + dx, y: q.y + dy }]));
     onBoard({
       ...board,
@@ -244,7 +262,7 @@ function RegionBox(props: {
       data-id={r.id}
       style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
       className={`region absolute rounded-(--radius) bg-white
-        ${lifted ? "z-10 shadow-md" : "shadow-xs"}
+        ${lifted ? "shadow-md" : "shadow-xs"}
         dark:bg-neutral-900 dark:shadow-none dark:inset-ring dark:inset-ring-white/5
         ${selected ? "ring-2 ring-emerald-600"
                   : "ring-1 ring-neutral-950/10 dark:ring-white/10"}

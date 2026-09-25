@@ -177,7 +177,6 @@ export default function App() {
         fitNonce={fitNonce}
         interactive={!casting && !scene.busy && !scene.dialog}
         onBoard={patchBoard}
-        onSelect={(id) => patchBoard({ ...scene.board, selected: id })}
       />
 
       {over && (

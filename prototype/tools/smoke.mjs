@@ -448,6 +448,51 @@ check((await cam()) === panned, "拖块把手动平移的视野冲掉了");
 await page.mouse.up();
 note("手动平移后拖块，视野保持不动");
 
+/* ---------- 10b. 层次：拿起就前移，松手不退回去 ----------
+   渲染顺序 = board.regions 的顺序，所以 z 序是模型里的一个事实，
+   不是拖动期间的一句 CSS。断言看 DOM 顺序，也就是实际压在谁上面。 */
+const zOrder = () =>
+  page.locator("[data-id]").evaluateAll((els) => els.map((e) => e.dataset.id));
+const dragBy = async (id, dx, dy) => {
+  const b = await page.locator(`[data-id="${id}"]`).boundingBox();
+  await page.mouse.move(b.x + 60, b.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 60 + dx, b.y + 40 + dy, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+};
+
+await go("arrange", 0);
+const z0 = await zOrder();
+check(z0.join(",") === "r1,r2,r3,r4,r5,r6", `对照：初始渲染顺序应为 r1..r6，实际 ${z0.join(",")}`);
+await dragBy("r3", 140, 300);
+const z1 = await zOrder();
+check(z1.at(-1) === "r3", `拿起的 r3 没有前移，松手后顺序 = ${z1.join(",")}`);
+check(z1.length === 6 && new Set(z1).size === 6, `前移把块弄丢了：${z1.join(",")}`);
+
+/* 松手之后再碰别的地方，不许把它压回底层 */
+const vpZ = await page.locator("#app").boundingBox();
+await page.mouse.click(vpZ.x + 20, vpZ.y + vpZ.height - 20);
+await page.waitForTimeout(120);
+const z2 = await zOrder();
+check(z2.at(-1) === "r3", `点过空白处后层次被压回去了：${z2.join(",")}`);
+
+/* 整组一起前移，组内相对顺序不变（r1、r2 同属 u1） */
+await go("arrange", 0);
+await dragBy("r2", 180, 240);
+const z3 = await zOrder();
+check(z3.slice(-2).join(",") === "r1,r2",
+  `整组应一起前移且保持组内顺序，实际尾部 = ${z3.slice(-2).join(",")}（全序 ${z3.join(",")}）`);
+note(`拿起 r3 → 前移到顶层并保持；整组 r1+r2 一起前移，组内顺序不变`);
+
+/* 层次变了，位置不该跟着变——两件事互不相干 */
+await go("arrange", 0);
+const posBefore = new Map((await boxes()).map((b) => [b.id, `${b.x},${b.y}`]));
+await dragBy("r3", 0, 260);
+const nudged = (await boxes()).filter((b) => posBefore.get(b.id) !== `${b.x},${b.y}`).map((b) => b.id);
+check(nudged.join(",") === "r3", `前移只该动层次，实际被挪动的是 ${nudged.join(",") || "（无）"}`);
+await page.screenshot({ path: join(SHOTS, "arrange-raised.png") });
+
 // ---------- 截图 ----------
 for (const [p, s] of [["drop", 0], ["drop", 1], ["reject", 1], ["scatter", 0], ["scatter", 1],
                       ["confirm", 1], ["confirm", 2], ["splitcut", 1], ["group", 0],
