@@ -140,17 +140,21 @@ export default function App() {
         dialog: {
           kind: "danger",
           title: "重跑解析会覆盖你摆好的一切",
+          /* 不可撤销，所以这句话必须说出口。曾经这里写的是
+             「本次会话内可以回滚一次」——那比什么都不说更糟：操作者
+             会为了保险先点一次试试，于是一个「保底」承诺本身把
+             不可撤销变成了常态（ADR-0011）。 */
           body: n
             ? <>
                 你已经挪动了{" "}
                 <b className="tabular-nums text-neutral-900 dark:text-white">{n}</b>{" "}
                 块区域，重跑会把整份编排
                 <b className="text-neutral-900 dark:text-white">整份覆盖</b>，不做合并。
-                <br />本次会话内可以回滚一次；刷新或关掉标签页就没了。
+                <br />没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。
               </>
             : <>
                 画布上还没有任何编排，重跑只是重新算一遍裁切与分组。
-                <br />本次会话内可以回滚一次；刷新或关掉标签页就没了。
+                <br />没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。
               </>,
           cancel: "取消", confirm: "仍然重跑",
         },
@@ -382,10 +386,8 @@ function Chrome(props: {
     case "grouped":
       items.push(btn("gsplit", "拆开分组"), btn("gmerge", "合并分组"));
       break;
-    case "moved-one": case "moved-group": case "arranged": case "operating":
-      items.push(<IconButton key="undo" label="撤销" size="md" onClick={() => onDemo("撤销")}
-        glyph={<Glyph icon={Icons.undo} />} />);
-      break;
+    /* 原来这一档是「撤销」。它删了：产品没有回滚，而那个按钮从来没实现过，
+       只弹一句演示提示——留一个假的撤销比没有撤销更糟（ADR-0011）。 */
   }
 
   if (["scattered", "grouped", "operating", "moved-one", "moved-group", "arranged",

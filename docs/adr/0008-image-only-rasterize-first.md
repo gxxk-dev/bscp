@@ -11,6 +11,9 @@ status: accepted
 [ADR-0007](./0007-dual-input-single-ai-pipeline.md)（OOXML 直解）：两者的前提都是
 「从文档里读出真字」，而这里不再读字——**文档被当作图片看待**。
 
+> **修正（[ADR-0011](./0011-no-rollback-rasterize-once.md)）：下方 Consequences 里
+> 「原始资源必须保留」与「栅格化按内容哈希缓存」两条已作废。** 栅格化产物只服务这一次。
+
 ## 为什么
 
 **收益是管线塌缩成一条。** 输入只有一种形态（位图），所以：
