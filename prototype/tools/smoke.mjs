@@ -32,7 +32,7 @@ writeFileSync(FIXTURES.png, PNG);
 writeFileSync(FIXTURES.docx, Buffer.from("PK fake docx for the gate test"));
 writeFileSync(FIXTURES.pdf, Buffer.from("%PDF-1.4\n% fake\n"));
 
-async function dropFiles(page, list) {
+async function dropFiles(page, list, at) {
   const dt = await page.evaluateHandle((items) => {
     const d = new DataTransfer();
     for (const [bytes, type, filename] of items) {
@@ -42,11 +42,12 @@ async function dropFiles(page, list) {
   }, list.map((f) => [[...readFileSync(f.path)], f.mime, f.name]));
   /* 派发到 #app 而不是 body：React 的事件树挂在 #root 里面，事件往上冒
      不会往下钻进那棵树。派给 body 的话处理器根本不会被调用。 */
-  await page.dispatchEvent("#app", "drop", { dataTransfer: dt });
+  await page.dispatchEvent("#app", "drop", { dataTransfer: dt, clientX: at?.x, clientY: at?.y });
 }
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const F = (name, mime, path) => ({ name, mime, path });
-const dropFile = (page, path, mime, name) => dropFiles(page, [F(name, mime, path)]);
+const dropFile = (page, path, mime, name, at) =>
+  dropFiles(page, [F(name, mime, path)], at);
 
 const ORDER = [
   "drop", "reject", "parse", "scatter", "confirm", "splitcut",
@@ -142,12 +143,13 @@ note(`拒收 DOCX → ${rej.match(/月考卷\.docx[^\n]*/)?.[0]?.slice(0, 60) ??
    只取 files[0] 的写法会把另外几份静默丢掉。操作者会以为都在。 */
 await go("drop", 0);
 const camAtDrop = await cam();
+const vpDrop = await page.locator("#app").boundingBox();
 await dropFiles(page, [
   F("卷子.pdf", "application/pdf", FIXTURES.pdf),
   F("板书.png", "image/png", FIXTURES.png),
   F("作业.docx", DOCX_MIME, FIXTURES.docx),
   F("讲解.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", FIXTURES.docx),
-]);
+], { x: vpDrop.x + 300, y: vpDrop.y + 220 });
 await page.waitForTimeout(300);
 const multi = (await page.locator("body").innerText()).replace(/\s+/g, " ");
 check((await page.locator("[data-id]").count()) === 2,
@@ -159,17 +161,37 @@ check(multi.includes("没收") && multi.includes("作业.docx") && multi.include
   `拒的也要逐个点名，不能静默丢弃，实际：${multi.slice(0, 300)}`);
 note(`混合投放 4 份 → ${multi.match(/已投放[^\n]*?。/)?.[0] ?? ""} 拒：作业.docx、讲解.pptx`);
 
-/* 相机不动的前提下，新内容必须落在**当前视野里**。掉在画布原点的话，
-   1440px 的屏只看得到第一份的一角，操作者还得自己平移过去才能确认
-   「到底收下了没有」——那比自动取景更糟。 */
+/* 相机不动的前提下，新内容必须锚在**松手那一��的光标**上，并落进当前视野。
+   掉在画布原点的话，1440px 的屏只看得到第一份的一角，操作者还得自己平移
+   过去才能确认「到底收下了没有」——那比自动取景更糟。 */
 const vpBox = await page.locator("#app").boundingBox();
-const first = (await boxes())[0];
+
+/* 单独在指定位置投一次，验它落在光标上（上面那次混合投放的落点是 300,200）。
+   y 取 100：这张占位纸 700 高，丢到 260 会探出屏幕下沿，收拢会把它拉回来
+   ——那是下面那条边缘测试要验的事，这条只验「没该收拢时别乱收」。 */
+await go("drop", 0);
+const camAnchor = await cam();
+const at = { x: vpBox.x + 420, y: vpBox.y + 100 };
+await dropFile(page, FIXTURES.pdf, "application/pdf", "锚点测试.pdf", at);
+await page.waitForTimeout(250);
 const px = await page.locator('[data-id]').first().boundingBox();
+check(Math.abs(px.x - at.x) < 4 && Math.abs(px.y - at.y) < 4,
+  `投放的内容没锚在光标上：期望屏幕 (${at.x}, ${at.y})，实际 (${Math.round(px.x)}, ${Math.round(px.y)})`);
 check(px.x >= vpBox.x - 2 && px.y >= vpBox.y - 2 && px.x < vpBox.x + vpBox.width,
-  `投放的内容没落在当前视野里：第一块屏幕坐标 x=${Math.round(px.x)} y=${Math.round(px.y)}，` +
-  `视野 x=${Math.round(vpBox.x)}..${Math.round(vpBox.x + vpBox.width)}，画布 x=${first.x}`);
-check((await cam()) === camAtDrop, "投放后相机动了 —— 内容该自己过来，不是视野该让路");
-note(`投放内容落在视野左上角附近（屏幕 x≈${Math.round(px.x)}），相机纹丝不动`);
+  `投放的内容没落在当前视野里：第一块屏幕 x=${Math.round(px.x)}，视野 x=${Math.round(vpBox.x)}..${Math.round(vpBox.x + vpBox.width)}`);
+check((await cam()) === camAnchor, "投放后相机动了 —— 内容该自己过来，不是视野该让路");
+note(`投放内容锚在光标处（屏幕 ${Math.round(px.x)},${Math.round(px.y)}），相机纹丝不动`);
+
+/* 丢在右下角时要往回收，不然一半资料在屏幕外，操作者会以为没投进来 */
+await go("drop", 0);
+await dropFile(page, FIXTURES.pdf, "application/pdf", "靠边丢.pdf",
+  { x: vpBox.x + vpBox.width - 30, y: vpBox.y + vpBox.height - 30 });
+await page.waitForTimeout(250);
+const edge = await page.locator('[data-id]').first().boundingBox();
+check(edge.x + edge.width <= vpBox.x + vpBox.width + 2,
+  `丢在右边缘时没收回来，右边超出 ${Math.round(edge.x + edge.width - vpBox.width)}px`);
+check(edge.x >= vpBox.x - 2, `收回后反而跑到视野左边了（x=${Math.round(edge.x)}）`);
+note(`丢在右下角自动收拢：右边界 ${Math.round(edge.x + edge.width)} ≤ 视野 ${Math.round(vpBox.x + vpBox.width)}`);
 
 /* 每份资源的角标要写得出自己的文件名——多份资源时「卷 · p1」是废话 */
 await go("cast", 0);

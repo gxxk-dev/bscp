@@ -283,23 +283,34 @@ const GAP = 60;
 
 export type Ingested = { regions: Region[]; rejected: string[]; bytes: number };
 
-/** origin = 当前视野左上角对应的画布坐标。
-    新内容落在**操作者正在看的地方**，而不是画布原点——相机一动不动，
-    是东西自己走过来。掉在原点的话，1440px 的屏上只能看见第一份的
-    一角，剩下几份全在屏幕外，而操作者还得自己把相机平移过去才能确认
-    「到底收下了没有」。这比自动取景更糟。 */
-export async function ingestFiles(files: File[], origin: { x: number; y: number }): Promise<Ingested> {
+/** anchor = 松手那一刻光标所在的画布坐标。bounds = 当前可见区域（画布坐标）。
+
+    新内容锚在**光标**上，不是画布原点，也不是固定贴左。往屏幕右下角丢，
+    它就该出现在右下角——不然东西和手指完全脱节，操作者得先找到它再拖。
+
+    但锚点只管「往哪落」，不管「落不落得下」：靠近右边缘时往左收，
+    靠近下边缘时往上收，不然整份资料有一半在屏幕外，操作者会以为没投进来。
+    收拢只动新内容，绝不碰相机。 */
+export async function ingestFiles(
+  files: File[],
+  anchor: { x: number; y: number },
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number },
+): Promise<Ingested> {
   const regions: Region[] = [];
   const rejected: string[] = [];
   let bytes = 0;
-  let x = origin.x;
+  let x = anchor.x;
 
   for (const [i, file] of files.entries()) {
     const v = judge(file);
     if (!v.ok) { rejected.push(v.reason); continue; }
     const size = v.kind === "image" ? await probeImage(v.url) : SHEET;
+    const y = bounds ? Math.min(anchor.y, bounds.maxY - size.h) : anchor.y;
     regions.push({
-      id: `a${i + 1}`, x, y: origin.y, w: size.w, h: size.h,
+      id: `a${i + 1}`,
+      x: bounds ? Math.min(x, bounds.maxX - size.w) : x,
+      y,
+      w: size.w, h: size.h,
       page: 1, unit: null, artifact: file.name,
       ...(v.kind === "image" ? { src: v.url } : { figure: true }),
     });
