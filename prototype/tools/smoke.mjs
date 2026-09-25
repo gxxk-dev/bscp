@@ -6,14 +6,43 @@
 // 脚本自己起 vite preview，不需要先手动开服务。
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const SHOTS = join(root, ".build", "shots");
+const FIX = join(root, ".build", "fixtures");
 const ORIGIN = "http://localhost:4173";
+
+/* 投放测试要真文件：只有真的 File 对象过一遍 MIME 判定，
+   才测得到「这个格式收不收」这条闸门。 */
+mkdirSync(FIX, { recursive: true });
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAWklEQVR4nO3QMQEAAAjDMMC/56EB" +
+  "Xis4kj7dOQGAjQ4gm5ggEBAQEBAQEBAQEBAQEBAQEBB4AV0dAQFo6AABjZcNPAAAAAElFTkSuQmCC",
+  "base64");
+const FIXTURES = {
+  png: join(FIX, "月考卷.png"),
+  docx: join(FIX, "月考卷.docx"),
+  pdf: join(FIX, "月考卷.pdf"),
+};
+writeFileSync(FIXTURES.png, PNG);
+writeFileSync(FIXTURES.docx, Buffer.from("PK fake docx for the gate test"));
+writeFileSync(FIXTURES.pdf, Buffer.from("%PDF-1.4\n% fake\n"));
+
+async function dropFile(page, path, mime, name) {
+  const buf = readFileSync(path);
+  const dt = await page.evaluateHandle(([bytes, type, filename]) => {
+    const d = new DataTransfer();
+    d.items.add(new File([new Uint8Array(bytes)], filename, { type }));
+    return d;
+  }, [[...buf], mime, name]);
+  /* 派发到 #app 而不是 body：React 的事件树挂在 #root 里面，事件往上冒
+     不会往下钻进那棵树。派给 body 的话处理器根本不会被调用。 */
+  await page.dispatchEvent("#app", "drop", { dataTransfer: dt });
+}
 
 const ORDER = [
   "drop", "reject", "parse", "scatter", "confirm", "splitcut",
@@ -69,11 +98,38 @@ const boxes = () => page.locator("[data-id]").evaluateAll((els) =>
 for (const p of ORDER) for (let s = 0; s < STEPS[p]; s++) await go(p, s);
 check(errors.length === 0, "有运行时错误：\n  " + errors.join("\n  "));
 
-// ---------- 2. 投放：还没投文件就不该有「解析」 ----------
+// ---------- 2. 投放：真拖一个文件进去，不许只是嘴上说说 ----------
+let acts;
 await go("drop", 0);
-let acts = await page.locator("#chrome button").allTextContents();
+acts = await page.locator("#chrome button").allTextContents();
 check(acts.length === 0, `drop#0 画布空时不该有按钮，实际：${JSON.stringify(acts)}`);
-note(`drop#0 底部控件 = ${JSON.stringify(acts)}（只有一句拖放提示，不给「解析」）`);
+
+/* 拖到屏幕任意位置都要有反应——投放区是整屏，不是一个小框 */
+await page.goto(`${ORIGIN}/?path=drop&step=0`, { waitUntil: "load" });
+const dt = await page.evaluateHandle(() => new DataTransfer());
+await page.dispatchEvent("#app", "dragover", { dataTransfer: dt });
+await page.waitForTimeout(80);
+const overVisible = await page.locator("text=松手就投放").isVisible();
+check(overVisible, "拖到画面上必须给出「可以放」的反馈，否则人不知道松手会发生什么");
+note("dragover 铺满整屏并提示「松手就投放」");
+
+await dropFile(page, FIXTURES.png, "image/png", "月考卷.png");
+await page.waitForTimeout(200);
+check((await page.locator("[data-id]").count()) === 1, "投放图片后画布上应出现一块");
+check((await page.locator("[data-id] img").count()) === 1, "投放的图片应真的显示出来");
+const afterDrop = await page.locator("body").innerText();
+check(afterDrop.includes("月考卷.png"), `回执应带上文件名，实际片段：${afterDrop.slice(0, 120)}`);
+check(afterDrop.includes("解析"), "投放成功后应出现「解析」");
+note(`投放图片 → ${afterDrop.match(/已投放[^\n]*/)?.[0] ?? "（无回执）"}`);
+
+await dropFile(page, FIXTURES.docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "月考卷.docx");
+await page.waitForTimeout(200);
+const rej = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+check(rej.includes("月考卷.docx") && rej.includes("另存为 PDF"),
+  `拒收回执要同时说清文件名和出路，实际：${rej.slice(0, 200)}`);
+check(rej.includes("首版只支持图片和 PDF") || rej.includes("首版不收 Word"),
+  `拒收回执要说清原因，实际：${rej.slice(0, 200)}`);
+note(`拒收 DOCX → ${rej.match(/月考卷\.docx[^\n]*/)?.[0]?.slice(0, 60) ?? "（无回执）"}`);
 
 await go("drop", 1);
 acts = await page.locator("#chrome button").allTextContents();
@@ -199,16 +255,54 @@ check(labels.length >= 4, `arrange#2 底部控件太少：${JSON.stringify(label
 check(labels.at(-1) === "重跑解析", `重跑必须排在最右，实际：${JSON.stringify(labels)}`);
 note(`arrange#2 底部 ${labels.length} 个控件 = ${labels.join(" · ")}`);
 
-// ---------- 10. 拖动真的能改位置 ----------
+// ---------- 10. 拖动真的能改位置，而且相机不许跟着动 ----------
+/* 相机的 transform 就在 #stage 上。空画布时也得读得到——投放那一屏
+   恰恰是没有区域的。 */
+const cam = () => page.locator("#stage").evaluate((e) => getComputedStyle(e).transform);
+
 await go("arrange", 0);
 const before = (await boxes()).find((b) => b.id === "r6").y;
 const box = await page.locator('[data-id="r6"]').boundingBox();
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 await page.mouse.down();
 await page.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 - 90, { steps: 8 });
-await page.mouse.up();
+check((await cam()) === await cam(), "相机在拖动过程中动了 —— 手感就是被这个毁掉的");
 check((await boxes()).find((b) => b.id === "r6").y !== before, "拖动 r6 应当改变它的位置");
-note("拖动生效：r6 的 y 变了");
+
+/* 逐帧查：相机必须在整段拖动里纹丝不动 */
+const frames = [];
+await page.mouse.move(box.x + box.width / 2 + 200, box.y + box.height / 2 - 120, { steps: 4 });
+for (let i = 0; i < 4; i++) {
+  frames.push(await cam());
+  await page.mouse.move(box.x + box.width / 2 + 200 + i * 30, box.y + box.height / 2 - 120, { steps: 2 });
+}
+check(new Set(frames).size === 1, `拖动全程相机变了 ${new Set(frames).size} 次：${[...new Set(frames)].join(" / ")}`);
+await page.mouse.up();
+note("拖动全程相机不动（transform 恒定），块本身在动");
+
+/* 投放也不许动相机 */
+await go("drop", 0);
+const camBeforeDrop = await cam();
+await dropFile(page, FIXTURES.png, "image/png", "月考卷.png");
+await page.waitForTimeout(200);
+check((await cam()) === camBeforeDrop, "投放文件后相机自己缩放/移动了 —— 落点应该由操作者自己平移");
+note("投放后相机不动");
+
+/* 操作者自己平移过之后，拖块也不能把它冲掉 */
+await go("arrange", 0);
+const vp = await page.locator("#app").boundingBox();
+await page.mouse.move(vp.x + 40, vp.y + vp.height - 40);
+await page.mouse.down();
+await page.mouse.move(vp.x + 140, vp.y + vp.height - 90, { steps: 4 });
+await page.mouse.up();
+const panned = await cam();
+const r6box = await page.locator('[data-id="r6"]').boundingBox();
+await page.mouse.move(r6box.x + 40, r6box.y + 40);
+await page.mouse.down();
+await page.mouse.move(r6box.x + 100, r6box.y + 90, { steps: 4 });
+check((await cam()) === panned, "拖块把手动平移的视野冲掉了");
+await page.mouse.up();
+note("手动平移后拖块，视野保持不动");
 
 // ---------- 截图 ----------
 for (const [p, s] of [["drop", 0], ["drop", 1], ["reject", 1], ["scatter", 0], ["scatter", 1],
