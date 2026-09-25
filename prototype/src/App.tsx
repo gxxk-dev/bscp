@@ -401,11 +401,19 @@ function Chrome(props: {
   if (hasContent) {
     /* 投屏和重跑之间也隔一道：一个常用，一个毁活。距离本身比一句
        「小心点」便宜。分隔用分组而不是 margin——general.md 禁止在
-       flex 子项之间用 ml-*。 */
-    const sep = <span key="sep" className="h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15" />;
-    items.push(sep,
+       flex 子项之间用 ml-*。
+
+       每道线各自是一个独立元素、key 唯一。早先把同一个
+       <span key="sep"> push 了两次：同层兄弟 key 重复，而生产构建会
+       剥掉 React 那句告警，冒烟测试跑的是 build + preview 不是 dev，
+       于是这处一直没人看见。两条线今天一模一样所以看不出错，真长得
+       不一样那天协调阶段按 key 配对，行为就没保证了。 */
+    const sep = (key: string) =>
+      <span key={key} className="h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15" />;
+    items.push(
+      sep("sep-edit"),
       <TextButton key="cast" variant={castMain ? "primary" : "secondary"} onClick={onCast}>投屏</TextButton>,
-      sep,
+      sep("sep-rerun"),
       <IconButton key="rerun" label="重跑解析" size="md" onClick={onRerun}
         glyph={<Glyph icon={Icons.redo}
           className="fill-red-600 dark:fill-red-400 group-hover:fill-red-600" />} />,
