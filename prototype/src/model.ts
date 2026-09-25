@@ -177,12 +177,20 @@ export function moveRegion(b: Board, ids: string[], dx: number, dy: number): Boa
   };
 }
 
-/** 重跑解析会抹掉的东西：操作者亲手挪走、且现在确实不在原位的块。 */
-export function movedCount(b: Board): number {
+/** 重跑会覆盖几块。
+    作用域是**一份资源**（ADR-0012）：只数这一份资源里被操作者亲手挪动、
+    且现在确实不在原位的块。画布上其他资源的编排不受影响，所以也不该被数进来
+    ——为重跑一份资料而报出整块画布的数字，是在吓唬操作者。
+
+    of 省略时数全部：原型里画布通常只有一份资源，界面上还没有「重跑哪一份」
+    的入口。真实实现里这个参数不会省——它就是那个入口带来的。 */
+export function movedCount(b: Board, of?: string): number {
   return b.touched.filter((id) => {
     const r = b.regions.find((q) => q.id === id);
+    if (!r) return false;
+    if (of !== undefined && r.artifact !== of) return false;
     const home = HOME.get(id);
-    return !!r && !!home && (Math.abs(r.x - home.x) > 1 || Math.abs(r.y - home.y) > 1);
+    return !!home && (Math.abs(r.x - home.x) > 1 || Math.abs(r.y - home.y) > 1);
   }).length;
 }
 

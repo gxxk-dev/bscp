@@ -139,21 +139,22 @@ export default function App() {
         ...s,
         dialog: {
           kind: "danger",
-          title: "重跑解析会覆盖你摆好的一切",
-          /* 不可撤销，所以这句话必须说出口。曾经这里写的是
-             「本次会话内可以回滚一次」——那比什么都不说更糟：操作者
-             会为了保险先点一次试试，于是一个「保底」承诺本身把
-             不可撤销变成了常态（ADR-0011）。 */
+          /* 作用域是这一份资源，不是整块画布（ADR-0012）。而且不可撤销，
+             所以「不能撤销」这句话必须说出口：曾经这里写的是「本次会话内
+             可以回滚一次」——那比什么都不说更糟，操作者会为了保险先点一次
+             试试，于是一个「保底」承诺本身把不可撤销变成了常态（ADR-0011）。 */
+          title: "重跑解析会覆盖这一份上你摆好的一切",
           body: n
             ? <>
-                你已经挪动了{" "}
+                这一份里你已经挪动了{" "}
                 <b className="tabular-nums text-neutral-900 dark:text-white">{n}</b>{" "}
-                块区域，重跑会把整份编排
+                块区域，重跑会把它们
                 <b className="text-neutral-900 dark:text-white">整份覆盖</b>，不做合并。
+                画布上别的资源不动。
                 <br />没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。
               </>
             : <>
-                画布上还没有任何编排，重跑只是重新算一遍裁切与分组。
+                这一份还没有任何编排，重跑只是重新算一遍裁切与分组。
                 <br />没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。
               </>,
           cancel: "取消", confirm: "仍然重跑",
@@ -417,7 +418,7 @@ function Chrome(props: {
       <span key="sep-edit" aria-hidden="true"
         className="h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15" />,
       <TextButton key="cast" variant={castMain ? "primary" : "secondary"} onClick={onCast}>投屏</TextButton>,
-      <IconButton key="rerun" label="重跑解析" size="md" onClick={onRerun}
+      <IconButton key="rerun" label="重跑这一份的解析" size="md" onClick={onRerun}
         glyph={<Glyph icon={Icons.redo}
           className="fill-red-600 dark:fill-red-400 group-hover:fill-red-600" />} />,
     );
