@@ -20,6 +20,8 @@ export type Region = {
   h: number;
   /** 来源页码，投屏前给操作者认「这块是哪来的」 */
   page: number;
+  /** 这块来自哪个投放的文件。多资源时角标才带得上信息 */
+  artifact?: string;
   /** 语义单元 id，null = 不属于任何一组 */
   unit: string | null;
   title?: string;
@@ -233,17 +235,22 @@ export function replaceWith(regions: Region[], seedId: string, parts: number): R
    首版只收图片和 PDF（ADR-0009）。拒绝必须**当场说清**：哪个文件、为什么、
    怎么办。丢一个「失败」标签等于把问题推回给操作者自己猜。
 
+   一次可以投多份。来源角标那条 user story（「知道一块来自哪份资源的
+   哪一页」）只有在多资源下才成立——只有一份文件时角标永远写着 p1，
+   那不是信息，是废话。而课前要摆的本来就不止一份：一份试卷卷子，
+   加上单独拍的板书照片。
+
    这段闸门放在最前面是有意的：它必须是整条管线的唯一入口，
    后面每一处都只处理「已经收下的文件」。 */
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOC = "application/msword";
 
-export type DropVerdict =
+export type Verdict =
   | { ok: true; kind: "image"; url: string }
   | { ok: true; kind: "pdf" }
   | { ok: false; reason: string };
 
-export function acceptFile(file: File): DropVerdict {
+export function judge(file: File): Verdict {
   const name = file.name;
   if (file.type === DOCX || file.type === DOC || /\.(docx?|rtf|odt)$/i.test(name)) {
     return { ok: false, reason: `${name} 是 Word 文档，首版不收 Word。` };
@@ -257,40 +264,73 @@ export function acceptFile(file: File): DropVerdict {
   if (file.type.startsWith("image/")) {
     return { ok: true, kind: "image", url: URL.createObjectURL(file) };
   }
-  return {
-    ok: false,
-    reason: `${name} 不是图片也不是 PDF，首版只收这两种。`,
-  };
+  return { ok: false, reason: `${name} 不是图片也不是 PDF，首版只收这两种。` };
 }
 
-export function rejectionHint(reason: string): string {
-  return `${reason}在希沃里另存为 PDF，或截图后直接投。`;
+/** 读图片的真实尺寸。丢进来就按原比例摆，不拉伸——拉伸过的图投出去
+    字是糊的，而「分辨率」恰恰是这个产品明确不打算解决的问题。 */
+function probeImage(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth || 1000, h: img.naturalHeight || 700 });
+    img.onerror = () => resolve({ w: 1000, h: 700 });
+    img.src = url;
+  });
 }
 
-/** 收下之后画布上出现什么。图片直接显示它自己——原型里最诚实的一步是
-    让人真丢一张试卷照片进来，然后亲手把区域拖开。 */
-export function boardForFile(verdict: Extract<DropVerdict, { ok: true }>): Board {
-  const region: Region = verdict.kind === "image"
-    ? { id: "r1", x: 0, y: 0, w: 1000, h: 700, page: 1, unit: null, src: verdict.url }
-    : { id: "r1", x: 0, y: 0, w: 1000, h: 700, page: 1, unit: null, figure: true };
-  return {
-    ...freshBoard([]),
-    regions: [region],
-    selected: null,
-  };
+const SHEET = { w: 1000, h: 700 };          // PDF 还没栅格化时的占位尺寸
+const GAP = 60;
+
+export type Ingested = { regions: Region[]; rejected: string[]; bytes: number };
+
+/** origin = 当前视野左上角对应的画布坐标。
+    新内容落在**操作者正在看的地方**，而不是画布原点——相机一动不动，
+    是东西自己走过来。掉在原点的话，1440px 的屏上只能看见第一份的
+    一角，剩下几份全在屏幕外，而操作者还得自己把相机平移过去才能确认
+    「到底收下了没有」。这比自动取景更糟。 */
+export async function ingestFiles(files: File[], origin: { x: number; y: number }): Promise<Ingested> {
+  const regions: Region[] = [];
+  const rejected: string[] = [];
+  let bytes = 0;
+  let x = origin.x;
+
+  for (const [i, file] of files.entries()) {
+    const v = judge(file);
+    if (!v.ok) { rejected.push(v.reason); continue; }
+    const size = v.kind === "image" ? await probeImage(v.url) : SHEET;
+    regions.push({
+      id: `a${i + 1}`, x, y: origin.y, w: size.w, h: size.h,
+      page: 1, unit: null, artifact: file.name,
+      ...(v.kind === "image" ? { src: v.url } : { figure: true }),
+    });
+    x += size.w + GAP;
+    bytes += file.size;
+  }
+  return { regions, rejected, bytes };
 }
 
-export function readyScene(board: Board, file: File): Scene {
-  return {
-    ...freshScene(),
-    screen: "ready",
-    board,
-    toast: `已投放 ${file.name}（${mb(file.size)}）。原件留着，换 DPI 重栅格化还要用它。`,
-  };
+/** 一次投放的回执要一次说清：收下了什么、拒了什么。混着投递时
+    静默丢掉拒收的那些，比明确报错更糟——操作者会以为都在。 */
+export function ingestToast(ing: Ingested): string {
+  const ok = ing.regions.length
+    ? `已投放 ${ing.regions.length} 份（${mb(ing.bytes)}）：${ing.regions.map((r) => r.artifact).join("、")}。`
+    : "";
+  const no = ing.rejected.length
+    ? `${ing.rejected.length ? "没收：" : ""}${ing.rejected.join("")}在希沃里另存为 PDF，或截图后直接投。`
+    : "";
+  return [ok, no].filter(Boolean).join("");
 }
 
 export const mb = (bytes: number) =>
   bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+export function boardFor(regions: Region[]): Board {
+  return { ...freshBoard([]), regions };
+}
+
+export function readyScene(regions: Region[], toast: string): Scene {
+  return { ...freshScene(), screen: "ready", board: boardFor(regions), toast };
+}
 
 /* ---------- 内容包围盒 ---------- */
 export function boxOf(regions: Region[]) {

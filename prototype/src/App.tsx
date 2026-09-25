@@ -4,11 +4,11 @@
    顶部那条是**评审用的脚手架**，不是被评审的产品 UI——所以投屏态它还在。
    底部那条和绿色提示条是设计对象：投屏时必须一次消失干净。
    每一屏都能用 URL 直接定位：?path=<key>&step=<从 0 起>。 */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import { Canvas } from "./Canvas";
-import { acceptFile, boardForFile, movedCount, readyScene, rejectionHint } from "./model";
-import type { Board, Scene } from "./model";
+import { ingestFiles, ingestToast, movedCount, readyScene } from "./model";
+import type { Board, Scene, View } from "./model";
 import { PATHS, PATH_KEYS } from "./paths";
 import { Glyph, IconButton, Icons, TextButton } from "./ui";
 
@@ -68,31 +68,33 @@ export default function App() {
 
   /* ---------- 投放 ----------
      整屏都是投放区（spec：入口「常驻但不显眼」，1 步完成）。所以监听挂在
-     根容器上而不是某个小框——拖到屏幕任何角落都算。 */
-  const [over, setOver] = useState(false);
+     根容器上而不是某个小框——拖到屏幕任何角落都算。
 
-  const ingest = useCallback((files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    const verdict = acceptFile(file);
-    if (!verdict.ok) {
-      setScene((s) => ({
-        ...s,
-        screen: "rejected",
-        /* 被拒的文件不变成任何东西：画布保持原样，不摆一份
-           「假如收下了会长什么样」的预览，那会让人以为已经投进去了。 */
-        board: s.board,
-        toast: rejectionHint(verdict.reason),
-      }));
+     一次可以投多份。混着投递时收下的照收、拒的照拒，但**必须一次说清**：
+     静默丢掉拒收的那些，操作者会以为都在。 */
+  const [over, setOver] = useState(false);
+  /* 当前视野。Canvas 报上来，投放时用来算「操作者正在看哪儿」。 */
+  const view = useRef<View>({ x: 0, y: 0, k: 1 });
+
+  const ingest = useCallback(async (files: FileList | null) => {
+    const list = [...(files ?? [])];
+    if (!list.length) return;
+    /* 内容落在当前视野左上角，而不是画布原点。相机不动。 */
+    const v = view.current;
+    const ing = await ingestFiles(list, { x: -v.x / v.k, y: -v.y / v.k });
+    if (!ing.regions.length) {
+      /* 一份都没收下：画布保持原样。不摆一份「假如收下了会长什么样」的
+         预览，那会让人以为已经投进去了。 */
+      setScene((s) => ({ ...s, screen: "rejected", toast: ingestToast(ing) }));
       return;
     }
-    setScene(readyScene(boardForFile(verdict), file));
+    setScene(readyScene(ing.regions, ingestToast(ing)));
   }, []);
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setOver(false);
-    ingest(e.dataTransfer.files);
+    void ingest(e.dataTransfer.files);
   };
 
   const rerun = () =>
@@ -285,7 +287,7 @@ function Chrome(props: {
   onFit: () => void;
   onRerun: () => void;
   onDemo: (what: string) => void;
-  onPick: (files: FileList | null) => void;
+  onPick: (files: FileList | null) => Promise<void>;
 }) {
   const { screen, castMain, onCast, onFit, onRerun, onDemo, onPick } = props;
   const items: ReactNode[] = [];
@@ -299,9 +301,9 @@ function Chrome(props: {
       items.push(
         <label key="drop" className="cursor-pointer px-3 text-sm text-neutral-500
           hover:text-neutral-900 dark:hover:text-white">
-          把图片或 PDF 拖到画面任意位置，或点这里选
-          <input type="file" accept="image/*,application/pdf" className="sr-only"
-            onChange={(e) => onPick(e.target.files)} />
+          把图片或 PDF 拖到画面任意位置（可多选），或点这里选
+          <input type="file" multiple accept="image/*,application/pdf" className="sr-only"
+            onChange={(e) => void onPick(e.target.files)} />
         </label>);
       break;
     case "rejected":
@@ -314,8 +316,8 @@ function Chrome(props: {
           text-sm font-medium text-neutral-600 ring-1 ring-transparent
           hover:bg-neutral-950/5 dark:text-neutral-300 dark:hover:bg-white/10">
           换个文件
-          <input type="file" accept="image/*,application/pdf" className="sr-only"
-            onChange={(e) => onPick(e.target.files)} />
+          <input type="file" multiple accept="image/*,application/pdf" className="sr-only"
+            onChange={(e) => void onPick(e.target.files)} />
         </label>);
       break;
     case "parsing":

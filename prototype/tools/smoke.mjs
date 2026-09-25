@@ -32,17 +32,21 @@ writeFileSync(FIXTURES.png, PNG);
 writeFileSync(FIXTURES.docx, Buffer.from("PK fake docx for the gate test"));
 writeFileSync(FIXTURES.pdf, Buffer.from("%PDF-1.4\n% fake\n"));
 
-async function dropFile(page, path, mime, name) {
-  const buf = readFileSync(path);
-  const dt = await page.evaluateHandle(([bytes, type, filename]) => {
+async function dropFiles(page, list) {
+  const dt = await page.evaluateHandle((items) => {
     const d = new DataTransfer();
-    d.items.add(new File([new Uint8Array(bytes)], filename, { type }));
+    for (const [bytes, type, filename] of items) {
+      d.items.add(new File([new Uint8Array(bytes)], filename, { type }));
+    }
     return d;
-  }, [[...buf], mime, name]);
+  }, list.map((f) => [[...readFileSync(f.path)], f.mime, f.name]));
   /* 派发到 #app 而不是 body：React 的事件树挂在 #root 里面，事件往上冒
      不会往下钻进那棵树。派给 body 的话处理器根本不会被调用。 */
   await page.dispatchEvent("#app", "drop", { dataTransfer: dt });
 }
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const F = (name, mime, path) => ({ name, mime, path });
+const dropFile = (page, path, mime, name) => dropFiles(page, [F(name, mime, path)]);
 
 const ORDER = [
   "drop", "reject", "parse", "scatter", "confirm", "splitcut",
@@ -93,6 +97,9 @@ const boxes = () => page.locator("[data-id]").evaluateAll((els) =>
     w: parseFloat(e.style.width),
     h: parseFloat(e.style.height),
   })));
+/* 相机的 transform 就在 #stage 上。空画布时也得读得到——投放那一屏
+   恰恰是没有区域的。 */
+const cam = () => page.locator("#stage").evaluate((e) => getComputedStyle(e).transform);
 
 // ---------- 1. 每一屏都不许有运行时错误 ----------
 for (const p of ORDER) for (let s = 0; s < STEPS[p]; s++) await go(p, s);
@@ -122,14 +129,53 @@ check(afterDrop.includes("月考卷.png"), `回执应带上文件名，实际片
 check(afterDrop.includes("解析"), "投放成功后应出现「解析」");
 note(`投放图片 → ${afterDrop.match(/已投放[^\n]*/)?.[0] ?? "（无回执）"}`);
 
-await dropFile(page, FIXTURES.docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "月考卷.docx");
+await dropFile(page, FIXTURES.docx, DOCX_MIME, "月考卷.docx");
 await page.waitForTimeout(200);
 const rej = (await page.locator("body").innerText()).replace(/\s+/g, " ");
 check(rej.includes("月考卷.docx") && rej.includes("另存为 PDF"),
   `拒收回执要同时说清文件名和出路，实际：${rej.slice(0, 200)}`);
-check(rej.includes("首版只支持图片和 PDF") || rej.includes("首版不收 Word"),
+check(rej.includes("首版不收 Word") || rej.includes("首版只支持图片和 PDF"),
   `拒收回执要说清原因，实际：${rej.slice(0, 200)}`);
 note(`拒收 DOCX → ${rej.match(/月考卷\.docx[^\n]*/)?.[0]?.slice(0, 60) ?? "（无回执）"}`);
+
+/* ---------- 2b. 一次投多份，混着收和拒 ----------
+   只取 files[0] 的写法会把另外几份静默丢掉。操作者会以为都在。 */
+await go("drop", 0);
+const camAtDrop = await cam();
+await dropFiles(page, [
+  F("卷子.pdf", "application/pdf", FIXTURES.pdf),
+  F("板书.png", "image/png", FIXTURES.png),
+  F("作业.docx", DOCX_MIME, FIXTURES.docx),
+  F("讲解.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", FIXTURES.docx),
+]);
+await page.waitForTimeout(300);
+const multi = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+check((await page.locator("[data-id]").count()) === 2,
+  `一次投 4 份应收下 2 份（PDF + PNG），实际画布上 ${await page.locator("[data-id]").count()} 块`);
+check(multi.includes("已投放 2 份"), `回执要一次说清收下几份，实际：${multi.slice(0, 200)}`);
+check(multi.includes("卷子.pdf") && multi.includes("板书.png"),
+  `收下的要逐个点名，实际：${multi.slice(0, 240)}`);
+check(multi.includes("没收") && multi.includes("作业.docx") && multi.includes("讲解.pptx"),
+  `拒的也要逐个点名，不能静默丢弃，实际：${multi.slice(0, 300)}`);
+note(`混合投放 4 份 → ${multi.match(/已投放[^\n]*?。/)?.[0] ?? ""} 拒：作业.docx、讲解.pptx`);
+
+/* 相机不动的前提下，新内容必须落在**当前视野里**。掉在画布原点的话，
+   1440px 的屏只看得到第一份的一角，操作者还得自己平移过去才能确认
+   「到底收下了没有」——那比自动取景更糟。 */
+const vpBox = await page.locator("#app").boundingBox();
+const first = (await boxes())[0];
+const px = await page.locator('[data-id]').first().boundingBox();
+check(px.x >= vpBox.x - 2 && px.y >= vpBox.y - 2 && px.x < vpBox.x + vpBox.width,
+  `投放的内容没落在当前视野里：第一块屏幕坐标 x=${Math.round(px.x)} y=${Math.round(px.y)}，` +
+  `视野 x=${Math.round(vpBox.x)}..${Math.round(vpBox.x + vpBox.width)}，画布 x=${first.x}`);
+check((await cam()) === camAtDrop, "投放后相机动了 —— 内容该自己过来，不是视野该让路");
+note(`投放内容落在视野左上角附近（屏幕 x≈${Math.round(px.x)}），相机纹丝不动`);
+
+/* 每份资源的角标要写得出自己的文件名——多份资源时「卷 · p1」是废话 */
+await go("cast", 0);
+const badges = await page.locator(".src-badge").allTextContents();
+check(badges.length === 6 && badges.every((b) => b.includes("p")),
+  `样例资源的角标应带页码，实际：${JSON.stringify(badges)}`);
 
 await go("drop", 1);
 acts = await page.locator("#chrome button").allTextContents();
@@ -256,10 +302,6 @@ check(labels.at(-1) === "重跑解析", `重跑必须排在最右，实际：${J
 note(`arrange#2 底部 ${labels.length} 个控件 = ${labels.join(" · ")}`);
 
 // ---------- 10. 拖动真的能改位置，而且相机不许跟着动 ----------
-/* 相机的 transform 就在 #stage 上。空画布时也得读得到——投放那一屏
-   恰恰是没有区域的。 */
-const cam = () => page.locator("#stage").evaluate((e) => getComputedStyle(e).transform);
-
 await go("arrange", 0);
 const before = (await boxes()).find((b) => b.id === "r6").y;
 const box = await page.locator('[data-id="r6"]').boundingBox();
