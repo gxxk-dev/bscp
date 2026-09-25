@@ -220,8 +220,10 @@ function showRadial(p) {
       ${icon(ico, "size-4 shrink-0 fill-neutral-600 dark:fill-neutral-300")}</span>`;
   }).join("");
   radialEl.innerHTML = `<span class="absolute top-1/2 left-1/2 grid size-8
-    -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-neutral-950
-    shadow-lg">${icon("x-mark", "size-4 shrink-0 fill-white")}</span>${wedges}`;
+    -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full
+    bg-neutral-950 shadow-lg
+    dark:bg-neutral-800 dark:shadow-none dark:inset-ring dark:inset-ring-white/5"
+    >${icon("x-mark", "size-4 shrink-0 fill-white")}</span>${wedges}`;
   radialEl.style.setProperty("--rx", p.x + "px");
   radialEl.style.setProperty("--ry", p.y + "px");
   radialEl.classList.remove("hidden");
@@ -384,6 +386,10 @@ viewport.addEventListener("wheel", (e) => {
   zoomAt(e.clientX, e.clientY,
     Math.min(4, Math.max(0.15, view.k * Math.exp(-e.deltaY * 0.0015))));
 }, { passive: false });
+
+/* 右键菜单一律拦掉：画布上没有原生右键语义，弹出浏览器菜单只会打断手势。
+   样式层面的禁选中在 input.css 的 #app 上；这里是行为层面。 */
+document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function zoomAt(cx, cy, k) {
   const p = toCanvas({ x: cx, y: cy });

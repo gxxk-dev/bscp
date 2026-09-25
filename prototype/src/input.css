@@ -16,6 +16,16 @@
     --radius: 0.5rem;
     --padding: 0.25rem;
   }
+
+  /* 触控画布上，浏览器的默认手势会和画布手势打架：
+     长按弹系统菜单、拖动时选中文字、按下闪蓝色高亮方块。
+     这三件事都必须压掉，否则老师按下去的第一下就被系统抢走。 */
+  #app {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* general.md：可复用样式优先用 @utility，这样能吃到所有变体 */
