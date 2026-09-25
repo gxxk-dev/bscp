@@ -1,13 +1,26 @@
 {
-  "name": "bscp-prototype-canvas-ui",
+  "name": "bscp-prototype",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build.mjs"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.14",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
     "playwright-core": "^1.63.0",
-    "tailwindcss": "^4.1.14"
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
   }
 }

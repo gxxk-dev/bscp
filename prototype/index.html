@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN" class="antialiased">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>prototype · 行为路径演示 · bscp</title>
+  <!--
+    ============================================================================
+    PROTOTYPE —— 用来回答一个设计问题，不是产品代码。
+
+    问题：spec 里那张「行为路径表」（入口 / 步数目标 / 误操作兜底）只有散文，
+          不可评审。ADR-0004 的约束是物理属性——「控件得能被手指在大屏上准确
+          点中」——而自己在脑子里渲染界面，渲染错了不会知道。
+
+    要回答：
+          （a）每条路径按表上的步数，真的走得通吗？
+          （b）入口位置在「操作者只盯屏幕一个角落」的前提下好不好够到？
+          （c）误操作兜底写的那句强确认，说清会丢什么了吗？
+
+    做法：把 60 条 user story 压缩成 12 条行为路径，每条一个可点到底的线性
+          演示。控件在这一层「真的活着」——点下去会有状态变化，但底层不接
+          任何真实数据。每一屏都能用 URL 直接定位：
+          ?path=<路径 key>&step=<从 0 起的步号>，例如 ?path=rerun&step=1
+          就是「重跑解析」的第二步（强确认那一屏）。
+
+    跑起来：bun install && bun run dev    然后开 http://localhost:5173
+    ============================================================================
+  -->
+  <link rel="preconnect" href="https://rsms.me/">
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
