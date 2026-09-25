@@ -357,6 +357,9 @@ check(body.includes("覆盖") && !/确定吗/.test(body), "确认框要说清会
    于是这个保底承诺本身把不可撤销变成了常态（ADR-0011） */
 check(!/回滚/.test(body), `确认框还在承诺回滚：${body}`);
 check(/不能撤销/.test(body), `确认框必须明说这一步不能撤销：${body}`);
+/* 作用域是这一份资源：报整块画布的数，是在吓唬操作者（ADR-0012） */
+check(/别的资源不动/.test(body), `确认框必须说清只覆盖这一份：${body}`);
+check(!/整份编排/.test(body), `确认框还在说「整份编排」，那是画布级的说法：${body}`);
 note(`rerun#1 确认框 = ${body}`);
 
 await go("rerun", 0);
@@ -369,7 +372,7 @@ check(!overlap, `rerun#0 有块互相压住了：${moved.map((b) => `${b.id}@${b
 note(`rerun#0 块位置 = ${moved.map((b) => `${b.id}@${b.x},${b.y}`).join(" | ")}`);
 
 await go("scatter", 1);
-await page.locator('#chrome [aria-label="重跑解析"]').click();
+await page.locator('#chrome [aria-label="重跑这一份的解析"]').click();
 await page.waitForTimeout(150);
 const clean = (await page.locator("[role=dialog]").innerText()).replace(/\s+/g, " ").trim();
 check(/还没有任何编排/.test(clean), `没摆过东西时确认框应说清楚，实际：${clean}`);
@@ -405,7 +408,7 @@ await go("arrange", 2);
 const labels = await page.locator("#chrome button").evaluateAll((els) =>
   els.map((e) => e.getAttribute("aria-label") ?? e.textContent.trim()));
 check(labels.length >= 3, `arrange#2 底部控件太少：${JSON.stringify(labels)}`);
-check(labels.at(-1) === "重跑解析", `重跑必须排在最右，实际：${JSON.stringify(labels)}`);
+check(labels.at(-1) === "重跑这一份的解析", `重跑必须排在最右，实际：${JSON.stringify(labels)}`);
 /* 产品没有回滚，所以工具条上不能有撤销——那个按钮从来没实现过，
    只弹一句演示提示，留着比没有更糟（ADR-0011） */
 check(!labels.includes("撤销"), `工具条上不该有撤销：${JSON.stringify(labels)}`);

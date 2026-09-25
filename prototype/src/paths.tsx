@@ -214,7 +214,7 @@ export const PATHS: Record<string, Path> = {
     no: 10, name: "重跑解析", budget: "2 步 · 入口 + 强确认",
     entry: "不在容易误触处；强确认",
     fallback: "确认框说清会丢什么；不能撤销",
-    claim: "会毁掉劳动的动作，只有这一个",
+    claim: "会毁掉这一份上劳动的动作，只有这一个",
     steps: [
       { hint: "先摆歪几块，模拟「你已经干了一会儿活」。注意重跑入口在哪：离其它动作隔了两道。",
         build: () => worked() },
@@ -224,18 +224,18 @@ export const PATHS: Record<string, Path> = {
           const n = movedCount(s.board);
           return { ...s, screen: "operating" as const, dialog: {
             kind: "danger" as const,
-            title: "重跑解析会覆盖你摆好的一切",
+            title: "重跑解析会覆盖这一份上你摆好的一切",
             body: n
-              ? <>你已经挪动了 <b className="tabular-nums text-neutral-900 dark:text-white">{n}</b> 块区域，重跑会把整份编排<b className="text-neutral-900 dark:text-white">整份覆盖</b>，不做合并。<br />
+              ? <>这一份里你已经挪动了 <b className="tabular-nums text-neutral-900 dark:text-white">{n}</b> 块区域，重跑会把它们<b className="text-neutral-900 dark:text-white">整份覆盖</b>，不做合并。画布上别的资源不动。<br />
                  没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。</>
-              : <>画布上还没有任何编排，重跑只是重新算一遍裁切与分组。<br />
+              : <>这一份还没有任何编排，重跑只是重新算一遍裁切与分组。<br />
                  没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。</>,
             cancel: "取消", confirm: "仍然重跑",
           } };
         } },
-      { hint: "覆盖是整体的，不合并——所以不会遇到「保留哪些、丢弃哪些」这种看不出规则的行为。也没有备份可退。",
+      { hint: "覆盖是这一份的，不合并——所以不会遇到「保留哪些、丢弃哪些」这种看不出规则的行为。画布上别的资源不动，也没有备份可退。",
         build: () => withScreen({ ...freshScene(), board: laid() }, "scattered",
-          { toast: "已重跑。旧的编排没有备份，覆盖不能撤销。" }) },
+          { toast: "已重跑这一份。旧的编排没有备份，覆盖不能撤销。" }) },
     ],
   },
 
