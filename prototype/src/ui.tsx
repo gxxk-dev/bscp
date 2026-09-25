@@ -116,6 +116,20 @@ export function UnitTag({ unit }: { unit: string }) {
   );
 }
 
-export function SourceBadge({ page }: { page: number }) {
-  return <span className="src-badge">卷 · p{page}</span>;
+/* 来源角标。它和手柄、选中框一样属于「操作痕迹」——投屏时必须消失，
+   所以它由 board.badges 控制，而不是渲染期的一个参数。
+
+   角标上写的是**文件名**，不是资源类别。投放可以一次给多份，只有文件名
+   能回答「这一块是哪来的」；只写「第 2 份 · p1」等于让操作者自己记顺序。 */
+export function SourceBadge({ artifact, page }: { artifact?: string; page: number }) {
+  const label = artifact
+    ? `${truncate(artifact, 14)} · p${page}`
+    : `卷 · p${page}`;
+  return <span className="src-badge" title={artifact ? `${artifact} 第 ${page} 页` : undefined}>{label}</span>;
+}
+
+/** 文件名可能是一长串 UUID。角标只有这么点宽度，尾巴砍掉比换行好看，
+    但完整名字留在 title 里，鼠标/长按能看全。 */
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 }

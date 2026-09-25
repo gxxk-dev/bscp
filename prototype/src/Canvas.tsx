@@ -28,8 +28,11 @@ export function Canvas(props: {
   interactive: boolean;
   onBoard: (b: Board) => void;
   onSelect: (id: string | null) => void;
+  /** 当前视野。App 用它把新投放的内容放到操作者正在看的地方，
+      而不是画布原点——相机不动，东西自己过来。 */
+  onViewChange?: (v: View) => void;
 }) {
-  const { board, zoom, fill, fitNonce, interactive, onBoard, onSelect } = props;
+  const { board, zoom, fill, fitNonce, interactive, onBoard, onSelect, onViewChange } = props;
   const vp = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   /** 取当前两指的坐标；不足两指返回 null */
@@ -69,7 +72,12 @@ export function Canvas(props: {
     setFit(fitView(board.regions, { w: r.width, h: r.height }, zoom, fill));
   }, [fitNonce, zoom, fill]);
 
-  const onView = useCallback((v: View) => setLive(v), []);
+  const moveCamera = useCallback((v: View) => setLive(v), []);
+
+  /* 把当前视野报给 App，投放时好把内容放到眼前 */
+  const report = useRef(onViewChange);
+  report.current = onViewChange;
+  useEffect(() => { report.current?.(view); }, [view.x, view.y, view.k]);
 
   const toCanvas = useCallback(
     (x: number, y: number) => {
@@ -132,7 +140,7 @@ export function Canvas(props: {
     if (!g) return;
 
     if (g.kind === "pan") {
-      onView({ ...g.from, x: g.from.x + (e.clientX - g.start.x), y: g.from.y + (e.clientY - g.start.y) });
+      moveCamera({ ...g.from, x: g.from.x + (e.clientX - g.start.x), y: g.from.y + (e.clientY - g.start.y) });
       return;
     }
     const p = toCanvas(e.clientX, e.clientY);
@@ -161,7 +169,7 @@ export function Canvas(props: {
     const r = vp.current?.getBoundingClientRect();
     if (!r) return;
     const p = { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
-    onView({ k, x: cx - r.left - p.x * k, y: cy - r.top - p.y * k });
+    moveCamera({ k, x: cx - r.left - p.x * k, y: cy - r.top - p.y * k });
   }
   const clamp = (k: number) => Math.min(4, Math.max(0.15, k));
 
@@ -251,7 +259,7 @@ function RegionBox(props: {
             ring-emerald-600 dark:bg-neutral-900 ${cls}`} />
         ))}
       {grouped && r.unit && <UnitTag unit={r.unit} />}
-      {badged && <SourceBadge page={r.page} />}
+      {badged && <SourceBadge artifact={r.artifact} page={r.page} />}
     </div>
   );
 }
