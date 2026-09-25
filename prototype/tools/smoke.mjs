@@ -419,7 +419,16 @@ check(hs[0] >= 28 && hs[0] <= 38, `按钮总高 ${hs[0]}px 超出应用型界面
 /* 48px 命中区是往上往下各探出 6px 的：相邻中心距不足 48，两颗按钮的
    命中区就互相压，触控上会出现「这一格归左边那颗」的盲区 */
 check(pitch >= 48, `相邻控件中心距只有 ${pitch}px，48px 触控命中区会互相压`);
-note(`底部控件：间距 ${gap}px、高 ${hs.join("/")}px、相邻中心距 ${pitch}px（48px 命中区不重叠）`);
+/* 分隔线只留一道，且在「投屏」之前。它曾经是两道硬编码的——多出来那道
+   在窄工具条里显得吵，而破坏性已经被 primary 填充和红图标标过两遍。 */
+const seps = await page.locator("#chrome span.w-px").count();
+check(seps === 1, `底部应有且只有一道分隔线，实际 ${seps} 道`);
+const sepBefore = await page.locator("#chrome > div > *").evaluateAll((els) => {
+  const i = els.findIndex((e) => e.matches("span.w-px"));
+  return i >= 0 ? els[i + 1]?.textContent?.trim() : null;
+});
+check(sepBefore === "投屏", `分隔线应隔开编排控件和「投屏」，实际它前面是 ${sepBefore}`);
+note(`底部控件：间距 ${gap}px、高 ${hs.join("/")}px、相邻中心距 ${pitch}px，分隔线 1 道`);
 
 // ---------- 10. 拖动真的能改位置，而且相机不许跟着动 ----------
 await go("arrange", 0);

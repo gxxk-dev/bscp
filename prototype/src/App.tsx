@@ -399,21 +399,22 @@ function Chrome(props: {
   const hasContent = screen !== "empty" && screen !== "rejected" && screen !== "ready"
     && screen !== "parsing";
   if (hasContent) {
-    /* 投屏和重跑之间也隔一道：一个常用，一个毁活。距离本身比一句
-       「小心点」便宜。分隔用分组而不是 margin——general.md 禁止在
-       flex 子项之间用 ml-*。
+    /* 一道分隔线，只在编排控件和「投屏」之间：左边是「我还在改」，
+       右边是「我要投出去了」，这个分组是真的。
 
-       每道线各自是一个独立元素、key 唯一。早先把同一个
-       <span key="sep"> push 了两次：同层兄弟 key 重复，而生产构建会
-       剥掉 React 那句告警，冒烟测试跑的是 build + preview 不是 dev，
-       于是这处一直没人看见。两条线今天一模一样所以看不出错，真长得
-       不一样那天协调阶段按 key 配对，行为就没保证了。 */
-    const sep = (key: string) =>
-      <span key={key} className="h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15" />;
+       早先投屏和重跑之间还有一道，想表达「一个常用一个毁活」。删掉了：
+       投屏本身是实心 primary，重跑已经是红图标 + 无填充，破坏性被标了
+       两遍；而且一条 4–5 个控件的窄工具条里，两道 1px 线各配 12px
+       间距，显得吵。破坏性真正的兜底是那个确认框——它报实际被覆盖的
+       块数，不是那句「确定吗」。
+
+       每道线是独立元素、key 唯一。早先把同一个 <span key="sep"> push
+       了两次：同层兄弟 key 重复，而生产构建会剥掉 React 那句告警，
+       冒烟测试跑的是 build + preview 不是 dev，于是这处一直没人看见。 */
     items.push(
-      sep("sep-edit"),
+      <span key="sep-edit" aria-hidden="true"
+        className="h-4 w-px shrink-0 bg-neutral-950/10 dark:bg-white/15" />,
       <TextButton key="cast" variant={castMain ? "primary" : "secondary"} onClick={onCast}>投屏</TextButton>,
-      sep("sep-rerun"),
       <IconButton key="rerun" label="重跑解析" size="md" onClick={onRerun}
         glyph={<Glyph icon={Icons.redo}
           className="fill-red-600 dark:fill-red-400 group-hover:fill-red-600" />} />,
