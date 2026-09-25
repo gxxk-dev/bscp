@@ -73,15 +73,36 @@ export default function App() {
      一次可以投多份。混着投递时收下的照收、拒的照拒，但**必须一次说清**：
      静默丢掉拒收的那些，操作者会以为都在。 */
   const [over, setOver] = useState(false);
-  /* 当前视野。Canvas 报上来，投放时用来算「操作者正在看哪儿」。 */
+  /* 当前视野。Canvas 报上来，投放时用来把光标位置换算成画布坐标。 */
   const view = useRef<View>({ x: 0, y: 0, k: 1 });
+  const shell = useRef<HTMLDivElement>(null);
 
-  const ingest = useCallback(async (files: FileList | null) => {
+  /** 屏幕坐标 → 画布坐标。没有 at 时退回视野左上角（文件选择器没有光标）。 */
+  const anchorAt = (at?: { x: number; y: number }) => {
+    const v = view.current;
+    const r = shell.current?.getBoundingClientRect();
+    /* 还没挂上（第一帧就投）时没有收拢边界，落到视野左上角即可 */
+    if (!r) return { x: -v.x / v.k, y: -v.y / v.k, bounds: undefined };
+    if (!at) return { x: -v.x / v.k, y: -v.y / v.k, bounds: boundsOf(r, v) };
+    return {
+      x: (at.x - r.left - v.x) / v.k,
+      y: (at.y - r.top - v.y) / v.k,
+      bounds: boundsOf(r, v),
+    };
+  };
+  const boundsOf = (r: DOMRect, v: View) => ({
+    minX: -v.x / v.k,
+    minY: -v.y / v.k,
+    maxX: (r.width - v.x) / v.k,
+    maxY: (r.height - v.y) / v.k,
+  });
+
+  const ingest = useCallback(async (files: FileList | null, at?: { x: number; y: number }) => {
     const list = [...(files ?? [])];
     if (!list.length) return;
-    /* 内容落在当前视野左上角，而不是画布原点。相机不动。 */
-    const v = view.current;
-    const ing = await ingestFiles(list, { x: -v.x / v.k, y: -v.y / v.k });
+    /* 内容锚在松手那一刻的光标上，并收拢进可见区域。相机不动。 */
+    const { x, y, bounds } = anchorAt(at);
+    const ing = await ingestFiles(list, { x, y }, bounds);
     if (!ing.regions.length) {
       /* 一份都没收下：画布保持原样。不摆一份「假如收下了会长什么样」的
          预览，那会让人以为已经投进去了。 */
@@ -94,7 +115,7 @@ export default function App() {
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setOver(false);
-    void ingest(e.dataTransfer.files);
+    void ingest(e.dataTransfer.files, { x: e.clientX, y: e.clientY });
   };
 
   const rerun = () =>
@@ -128,6 +149,7 @@ export default function App() {
   return (
     <div
       id="app"
+      ref={shell}
       className="isolate fixed inset-0 overflow-hidden bg-neutral-100 text-neutral-900
                  dark:bg-neutral-950 dark:text-neutral-100"
       onDragOver={(e) => { e.preventDefault(); setOver(true); }}
