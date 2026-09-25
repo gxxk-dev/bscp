@@ -32,6 +32,11 @@ writeFileSync(FIXTURES.png, PNG);
 writeFileSync(FIXTURES.docx, Buffer.from("PK fake docx for the gate test"));
 writeFileSync(FIXTURES.pdf, Buffer.from("%PDF-1.4\n% fake\n"));
 
+/* 派发到 #app 而不是 body：React 的事件树挂在 #root 里面，事件往上冒
+   不会往下钻进那棵树。派给 body 的话处理器根本不会被调用。 */
+const dropDT = (page, dt, at) =>
+  page.dispatchEvent("#app", "drop", { dataTransfer: dt, clientX: at?.x, clientY: at?.y });
+
 async function dropFiles(page, list, at) {
   const dt = await page.evaluateHandle((items) => {
     const d = new DataTransfer();
@@ -40,9 +45,22 @@ async function dropFiles(page, list, at) {
     }
     return d;
   }, list.map((f) => [[...readFileSync(f.path)], f.mime, f.name]));
-  /* 派发到 #app 而不是 body：React 的事件树挂在 #root 里面，事件往上冒
-     不会往下钻进那棵树。派给 body 的话处理器根本不会被调用。 */
-  await page.dispatchEvent("#app", "drop", { dataTransfer: dt, clientX: at?.x, clientY: at?.y });
+  await dropDT(page, dt, at);
+}
+/* 现场画一张真的大 PNG。造这种文件不是为了看，是为了让 probeImage
+   读到一个手机实拍照那个量级的自然尺寸（3000×2000）——按原尺寸摆的话
+   一张图就把整块画布吞掉，第二份连落脚的缝都没有。 */
+function bigPhotoDT(page) {
+  return page.evaluateHandle(() => new Promise((res) => {
+    const c = document.createElement("canvas");
+    c.width = 3000; c.height = 2000;
+    c.getContext("2d").fillRect(0, 0, 3000, 2000);
+    c.toBlob((b) => {
+      const d = new DataTransfer();
+      d.items.add(new File([b], "板书实拍.png", { type: "image/png" }));
+      res(d);
+    }, "image/png");
+  }));
 }
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const F = (name, mime, path) => ({ name, mime, path });
@@ -167,8 +185,9 @@ note(`混合投放 4 份 → ${multi.match(/已投放[^\n]*?。/)?.[0] ?? ""} �
 const vpBox = await page.locator("#app").boundingBox();
 
 /* 单独在指定位置投一次，验它落在光标上（上面那次混合投放的落点是 300,200）。
-   y 取 100：这张占位纸 700 高，丢到 260 会探出屏幕下沿，收拢会把它拉回来
-   ——那是下面那条边缘测试要验的事，这条只验「没该收拢时别乱收」。 */
+   y 取 100：PDF 占位纸 1000×700，按视野份额收过之后是 605×423，丢到
+   y=260 正好贴住下沿、触发收拢——那是下面那条边缘测试要验的事，这条只验
+   「没该收拢时别乱收」。 */
 await go("drop", 0);
 const camAnchor = await cam();
 const at = { x: vpBox.x + 420, y: vpBox.y + 100 };
@@ -181,6 +200,67 @@ check(px.x >= vpBox.x - 2 && px.y >= vpBox.y - 2 && px.x < vpBox.x + vpBox.width
   `投放的内容没落在当前视野里：第一块屏幕 x=${Math.round(px.x)}，视野 x=${Math.round(vpBox.x)}..${Math.round(vpBox.x + vpBox.width)}`);
 check((await cam()) === camAnchor, "投放后相机动了 —— 内容该自己过来，不是视野该让路");
 note(`投放内容锚在光标处（屏幕 ${Math.round(px.x)},${Math.round(px.y)}），相机纹丝不动`);
+
+/* ---------- 2c. 默认大小受控，且多份依次向右下角摊开 ----------
+   这两条是一件事的两个头：不控制大小，右边那份压根没地方摆；摊开而不
+   控制大小，第三份的右下角已经在屏外了。 */
+
+/* 头一：大图按视野份额收，不按自然尺寸。3000×2000 是手机实拍照的量级。 */
+await go("drop", 0);
+const vpBig = await page.locator("#app").boundingBox();
+await dropDT(page, await bigPhotoDT(page), { x: vpBig.x + 80, y: vpBig.y + 80 });
+await page.waitForTimeout(400);
+const big = await page.locator("[data-id]").first().boundingBox();
+check(big.width <= vpBig.width * 0.45,
+  `大图按原尺寸摆出来了：3000px 的实拍照占 ${Math.round(big.width)}px 宽（视野只有 ${vpBig.width}px）`);
+check(big.x + big.width <= vpBig.x + vpBig.width + 2 && big.y + big.height <= vpBig.y + vpBig.height + 2,
+  `大图没收进视野：右边 ${Math.round(big.x + big.width - vpBig.width)}px、下边 ${Math.round(big.y + big.height - vpBig.height)}px 出界`);
+note(`3000×2000 的实拍照 → 屏上 ${Math.round(big.width)}×${Math.round(big.height)}`);
+
+/* 头二：小图不放大。放大出来的字是糊的，而这份资料等下要投到大屏上看。 */
+await go("drop", 0);
+await dropFile(page, FIXTURES.png, "image/png", "小图.png", { x: vpBox.x + 100, y: vpBox.y + 100 });
+await page.waitForTimeout(250);
+const small = await page.locator("[data-id]").first().boundingBox();
+check(Math.round(small.width) === 100,
+  `100px 的小图被放大到 ${Math.round(small.width)}px —— 放大出来的字是糊的`);
+note(`100×100 的小图 → 原尺寸摆放，不放大`);
+
+/* 头三：多份依次向右下角错开，每级步长相同，且整叠都在视野里。 */
+await go("drop", 0);
+const camCascade = await cam();
+await dropFiles(page, [
+  F("卷子.pdf", "application/pdf", FIXTURES.pdf),
+  F("板书.png", "image/png", FIXTURES.png),
+  F("实验报告.pdf", "application/pdf", FIXTURES.pdf),
+], { x: vpBox.x + 140, y: vpBox.y + 120 });
+await page.waitForTimeout(350);
+const cas = (await boxes()).sort((a, b) => a.x - b.x);
+check(cas.length === 3, `三份都该收下，实际 ${cas.length} 块`);
+const sx = cas[1].x - cas[0].x, sy = cas[1].y - cas[0].y;
+check(sx > 20 && sy > 20, `第二份没排在第一份的右下角：dx=${sx} dy=${sy}`);
+check(cas[2].x - cas[1].x === sx && cas[2].y - cas[1].y === sy,
+  `三份没排成一条等步长的对角线：${cas.map((b) => `${b.id}@${b.x},${b.y}`).join(" · ")}`);
+const out = cas.filter((b) => b.x < vpBox.x - 2 || b.y < vpBox.y - 2
+  || b.x + b.w > vpBox.x + vpBox.width + 2 || b.y + b.h > vpBox.y + vpBox.height + 2);
+check(!out.length, `有 ${out.length} 份落在视野外：${out.map((b) => `${b.id}@${b.x},${b.y}`).join(" · ")}`);
+check((await cam()) === camCascade, "摊开时相机动了 —— 相机只归操作者");
+/* 错开之后每份只露出一角，认出「哪份是谁」的地方就只剩角标 */
+const casBadges = await page.locator(".src-badge").allTextContents();
+check(casBadges.length === 3 && casBadges.every((b) => /卷子|板书|实验/.test(b)),
+  `三份都要带自己的来源角标，实际：${JSON.stringify(casBadges)}`);
+note(`3 份依次向右下 ${sx}×${sy}px，整叠在视野内，相机不动，角标各带文件名`);
+await page.screenshot({ path: join(SHOTS, "drop-cascade.png") });
+
+/* 补投不该抹掉已有的一批。抹掉等于逼人从头再来一遍。 */
+await go("drop", 0);
+await dropFile(page, FIXTURES.pdf, "application/pdf", "第一批.pdf", { x: vpBox.x + 100, y: vpBox.y + 100 });
+await page.waitForTimeout(250);
+await dropFile(page, FIXTURES.png, "image/png", "补投.png", { x: vpBox.x + 100, y: vpBox.y + 100 });
+await page.waitForTimeout(250);
+check((await page.locator("[data-id]").count()) === 2,
+  `补投把第一批抹掉了：画布上应剩 2 块，实际 ${await page.locator("[data-id]").count()} 块`);
+note("补投一份 = 接着摊，原有的一批不动");
 
 /* 丢在右下角时要往回收，不然一半资料在屏幕外，操作者会以为没投进来 */
 await go("drop", 0);

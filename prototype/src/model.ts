@@ -279,7 +279,30 @@ function probeImage(url: string): Promise<{ w: number; h: number }> {
 }
 
 const SHEET = { w: 1000, h: 700 };          // PDF 还没栅格化时的占位尺寸
-const GAP = 60;
+
+/* ---------- 默认大小与摊开方式 ----------
+   这两个参数一起决定「丢进来之后屏幕上是什么样」，不是审美偏好：1440×900
+   的屏上并排放三份 1000×700 的纸，第一份占掉七成宽，第二、三份整个在
+   屏外。操作者看到的是一张纸加一句「已投放 3 份」——那份回执是真的，
+   屏上却没东西。 */
+
+/** 一份资源默认最多占视野的多大一块。等比缩，字不会被拉变形。 */
+const SHARE = { w: 0.42, h: 0.6 };
+
+/** 相邻两份错开的步长（相对第一份的短边），封在 28–72px。
+    太小看不出是两份，太大后面几份就甩出屏外。 */
+const STEP_SHARE = 0.14, STEP_MIN = 28, STEP_MAX = 72;
+
+export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
+
+/** 默认大小：等比缩到视野的一个份额以内，**不放大**。
+    不放大是因为插值出来的字是糊的，而这份资料等下还要投到大屏上看——
+    为了摆得好看先放大，等于提前毁掉它。 */
+function fitInto(b: Bounds | undefined, w: number, h: number) {
+  if (!b) return { w, h };
+  const k = Math.min(1, ((b.maxX - b.minX) * SHARE.w) / w, ((b.maxY - b.minY) * SHARE.h) / h);
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
 
 export type Ingested = { regions: Region[]; rejected: string[]; bytes: number };
 
@@ -288,35 +311,62 @@ export type Ingested = { regions: Region[]; rejected: string[]; bytes: number };
     新内容锚在**光标**上，不是画布原点，也不是固定贴左。往屏幕右下角丢，
     它就该出现在右下角——不然东西和手指完全脱节，操作者得先找到它再拖。
 
-    但锚点只管「往哪落」，不管「落不落得下」：靠近右边缘时往左收，
-    靠近下边缘时往上收，不然整份资料有一半在屏幕外，操作者会以为没投进来。
-    收拢只动新内容，绝不碰相机。 */
+    多份**依次向右下角摊开**，像把一叠纸在桌面上错开：第 i 份比第 i-1 份
+    右下各错开一个步长。错开之后每份都露出一角和角标上的文件名，一眼能
+    数清投了几份、是哪几份；并排则永远只有第一份在屏内。
+
+    收拢按**整叠**算，不按单份：单份收拢会把「依次错开」压回并排，恰好
+    毁掉这一屏要证明的事。收拢只动新内容，绝不碰相机。 */
 export async function ingestFiles(
   files: File[],
   anchor: { x: number; y: number },
-  bounds?: { minX: number; minY: number; maxX: number; maxY: number },
+  bounds?: Bounds,
 ): Promise<Ingested> {
-  const regions: Region[] = [];
+  const kept: { name: string; size: { w: number; h: number }; url?: string }[] = [];
   const rejected: string[] = [];
   let bytes = 0;
-  let x = anchor.x;
 
-  for (const [i, file] of files.entries()) {
+  /* 先把整叠量出来再摆。边收边摆的话，第 i 份的落点依赖第 i-1 份的尺寸，
+     而尺寸又随收拢结果变——排到一半发现第一步收过头，后面全歪。 */
+  for (const file of files) {
     const v = judge(file);
     if (!v.ok) { rejected.push(v.reason); continue; }
-    const size = v.kind === "image" ? await probeImage(v.url) : SHEET;
-    const y = bounds ? Math.min(anchor.y, bounds.maxY - size.h) : anchor.y;
-    regions.push({
-      id: `a${i + 1}`,
-      x: bounds ? Math.min(x, bounds.maxX - size.w) : x,
-      y,
-      w: size.w, h: size.h,
-      page: 1, unit: null, artifact: file.name,
-      ...(v.kind === "image" ? { src: v.url } : { figure: true }),
+    const raw = v.kind === "image" ? await probeImage(v.url) : SHEET;
+    kept.push({
+      name: file.name,
+      size: fitInto(bounds, raw.w, raw.h),
+      ...(v.kind === "image" ? { url: v.url } : {}),
     });
-    x += size.w + GAP;
     bytes += file.size;
   }
+
+  const n = kept.length;
+  const first = kept[0]?.size;
+  const step = first
+    ? Math.min(STEP_MAX, Math.max(STEP_MIN, Math.round(Math.min(first.w, first.h) * STEP_SHARE)))
+    : 0;
+
+  /* 整叠收拢：最右/最下那块出屏了，整叠一起退回来。 */
+  let dx = 0, dy = 0;
+  if (bounds && n) {
+    const last = kept[n - 1]!.size;
+    const right = anchor.x + (n - 1) * step + last.w;
+    const bottom = anchor.y + (n - 1) * step + last.h;
+    if (right > bounds.maxX) dx = bounds.maxX - right;
+    if (anchor.x + dx < bounds.minX) dx = bounds.minX - anchor.x;
+    if (bottom > bounds.maxY) dy = bounds.maxY - bottom;
+    if (anchor.y + dy < bounds.minY) dy = bounds.minY - anchor.y;
+  }
+
+  const regions: Region[] = kept.map((k, i) => ({
+    id: `a${i + 1}`,
+    x: anchor.x + i * step + dx,
+    y: anchor.y + i * step + dy,
+    w: k.size.w, h: k.size.h,
+    page: 1, unit: null, artifact: k.name,
+    ...(k.url ? { src: k.url } : { figure: true }),
+  }));
+
   return { regions, rejected, bytes };
 }
 
@@ -336,7 +386,9 @@ export const mb = (bytes: number) =>
   bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 export function boardFor(regions: Region[]): Board {
-  return { ...freshBoard([]), regions };
+  /* 投放的块自带角标。错开摆放之后每份只露出一角，能认出「这一份是
+     哪份文件」的地方就只剩角标了；没有它，错开和并排在屏上无区别。 */
+  return { ...freshBoard([]), regions, badges: true };
 }
 
 export function readyScene(regions: Region[], toast: string): Scene {
