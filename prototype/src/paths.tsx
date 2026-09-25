@@ -52,7 +52,7 @@ export const PATHS: Record<string, Path> = {
     steps: [
       { hint: "整屏都是投放区。拖进来 → 立刻就是下一步。",
         build: () => withScreen({ ...freshScene(), board: freshBoard([]) }, "empty") },
-      { hint: "投放完成。原件已留（换 DPI 重栅格化还要用它），现在可以解析了。",
+      { hint: "投放完成。原件只服务这一轮管线，不留下来。现在可以解析了。",
         build: () => withScreen(freshScene(), "ready") },
     ],
   },
@@ -102,7 +102,7 @@ export const PATHS: Record<string, Path> = {
   confirm: {
     no: 5, name: "拍板裁切", budget: "1 步/块；支持「全部接受」",
     entry: "就地浮出的确认控件",
-    fallback: "未拍板状态可见；可撤销",
+    fallback: "未拍板状态可见；拍板前可改框",
     claim: "系统找出来的块，要你点头才算数",
     steps: [
       { hint: "6 块里有一块没拍板（虚线）。虚线就是「还没审」的状态，不会漏掉。",
@@ -122,7 +122,7 @@ export const PATHS: Record<string, Path> = {
   splitcut: {
     no: 6, name: "拆 / 合裁切", budget: "2 步内 · 选中后的就近动作",
     entry: "选中块后就近浮出",
-    fallback: "可撤销",
+    fallback: "切碎了能合回去",
     claim: "切太粗和切太碎都能就地改",
     steps: [
       { hint: "选中一块。就近动作出现在它旁边，不跑到屏幕另一头。",
@@ -140,7 +140,7 @@ export const PATHS: Record<string, Path> = {
   group: {
     no: 7, name: "拆 / 合分组", budget: "2 步内 · 选中后的就近动作",
     entry: "选中块后就近浮出",
-    fallback: "可撤销",
+    fallback: "分错了能拆开、能合并",
     claim: "分组是提议，可以推翻",
     steps: [
       { hint: "虚线框圈出的就是语义单元的提议（u1 / u2 / u3）。它只是提议。",
@@ -156,7 +156,7 @@ export const PATHS: Record<string, Path> = {
   arrange: {
     no: 8, name: "单块 / 整组拖动", budget: "1 步 · 直接拖",
     entry: "直接拖（整组拖：拖组内任一块）",
-    fallback: "可撤销",
+    fallback: "摆错了就再拖回去",
     claim: "摆放是纯人工的，AI 从不摆放",
     steps: [
       { hint: "拖一块。注意：没有吸附、没有对齐线、没有「AI 建议的位置」。",
@@ -186,7 +186,7 @@ export const PATHS: Record<string, Path> = {
   reread: {
     no: 9, name: "继续切碎（提高可读性）", budget: "2 步内 · 选中后就近动作",
     entry: "选中块后就近浮出",
-    fallback: "可撤销",
+    fallback: "切细了就合回整块",
     claim: "「字号太小」靠切分解决，不靠提高分辨率",
     steps: [
       { hint: "一张数据表，投到大屏上后排看不清。选中它。",
@@ -213,7 +213,7 @@ export const PATHS: Record<string, Path> = {
   rerun: {
     no: 10, name: "重跑解析", budget: "2 步 · 入口 + 强确认",
     entry: "不在容易误触处；强确认",
-    fallback: "确认框说清会丢什么；会话内快照可回滚",
+    fallback: "确认框说清会丢什么；不能撤销",
     claim: "会毁掉劳动的动作，只有这一个",
     steps: [
       { hint: "先摆歪几块，模拟「你已经干了一会儿活」。注意重跑入口在哪：离其它动作隔了两道。",
@@ -227,15 +227,15 @@ export const PATHS: Record<string, Path> = {
             title: "重跑解析会覆盖你摆好的一切",
             body: n
               ? <>你已经挪动了 <b className="tabular-nums text-neutral-900 dark:text-white">{n}</b> 块区域，重跑会把整份编排<b className="text-neutral-900 dark:text-white">整份覆盖</b>，不做合并。<br />
-                 本次会话内可以回滚一次；刷新或关掉标签页就没了。</>
+                 没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。</>
               : <>画布上还没有任何编排，重跑只是重新算一遍裁切与分组。<br />
-                 本次会话内可以回滚一次；刷新或关掉标签页就没了。</>,
+                 没有备份，这一步<b className="text-red-600 dark:text-red-400">不能撤销</b>。</>,
             cancel: "取消", confirm: "仍然重跑",
           } };
         } },
-      { hint: "覆盖是整体的，不合并——所以不会遇到「保留哪些、丢弃哪些」这种看不出规则的行为。",
+      { hint: "覆盖是整体的，不合并——所以不会遇到「保留哪些、丢弃哪些」这种看不出规则的行为。也没有备份可退。",
         build: () => withScreen({ ...freshScene(), board: laid() }, "scattered",
-          { toast: "已重跑。快照留在本次会话内，可以回滚一次。" }) },
+          { toast: "已重跑。旧的编排没有备份，覆盖不能撤销。" }) },
     ],
   },
 

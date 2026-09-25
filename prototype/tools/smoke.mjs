@@ -353,6 +353,10 @@ check(await page.locator("[role=dialog]").isVisible(), "rerun#1 必须弹强确�
 const body = (await page.locator("[role=dialog]").innerText()).replace(/\s+/g, " ").trim();
 check(/2\s*块区域/.test(body), `确认框应数出 2 块被移动的区域（上一屏挪过 r1 也不该多算），实际：${body}`);
 check(body.includes("覆盖") && !/确定吗/.test(body), "确认框要说清会丢什么，不做无脑确认");
+/* 承诺过「可以回滚」比什么都不说更糟：操作者会为了保险先点一次试试，
+   于是这个保底承诺本身把不可撤销变成了常态（ADR-0011） */
+check(!/回滚/.test(body), `确认框还在承诺回滚：${body}`);
+check(/不能撤销/.test(body), `确认框必须明说这一步不能撤销：${body}`);
 note(`rerun#1 确认框 = ${body}`);
 
 await go("rerun", 0);
@@ -369,6 +373,7 @@ await page.locator('#chrome [aria-label="重跑解析"]').click();
 await page.waitForTimeout(150);
 const clean = (await page.locator("[role=dialog]").innerText()).replace(/\s+/g, " ").trim();
 check(/还没有任何编排/.test(clean), `没摆过东西时确认框应说清楚，实际：${clean}`);
+check(/不能撤销/.test(clean), `没摆过东西时也必须说清不能撤销，实际：${clean}`);
 note(`碎开后直接点重跑 = ${clean.slice(0, 40)}…`);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
@@ -399,8 +404,11 @@ check((await page.locator(".src-badge").count()) === 6, "Esc 应能退出投屏�
 await go("arrange", 2);
 const labels = await page.locator("#chrome button").evaluateAll((els) =>
   els.map((e) => e.getAttribute("aria-label") ?? e.textContent.trim()));
-check(labels.length >= 4, `arrange#2 底部控件太少：${JSON.stringify(labels)}`);
+check(labels.length >= 3, `arrange#2 底部控件太少：${JSON.stringify(labels)}`);
 check(labels.at(-1) === "重跑解析", `重跑必须排在最右，实际：${JSON.stringify(labels)}`);
+/* 产品没有回滚，所以工具条上不能有撤销——那个按钮从来没实现过，
+   只弹一句演示提示，留着比没有更糟（ADR-0011） */
+check(!labels.includes("撤销"), `工具条上不该有撤销：${JSON.stringify(labels)}`);
 note(`arrange#2 底部 ${labels.length} 个控件 = ${labels.join(" · ")}`);
 
 /* 间距量的是**渲染出来的位置**，不是类名。早先外层 gap-x-2 写在只有
