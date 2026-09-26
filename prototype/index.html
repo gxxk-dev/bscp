@@ -26,8 +26,20 @@
     跑起来：bun install && bun run dev    然后开 http://localhost:5173
     ============================================================================
   -->
-  <link rel="preconnect" href="https://rsms.me/">
-  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+  <!--
+    这里原来从 https://rsms.me/ 载 Inter。已经删掉，两条理由都跟「能不能跑」
+    有关，不是审美问题：
+      1. 目标环境是校内教室，没外网。这两条 <link> 在那儿是永远失败的请求，
+         而冒烟/构建产物不该依赖一个到不了的网络。
+      2. 它让 page.screenshot 卡在 "waiting for fonts to load"，30s 超时抛
+         **未捕获异常**——而冒烟的 fails/notes 原本只在文件末尾输出，
+         于是「字体超时」会把前面每一条断言的结果一起吞掉。
+    去掉之后字体落到 index.css 里 --font-sans 声明的下一级
+    （ui-sans-serif, system-ui, "Noto Sans SC", "Microsoft YaHei"）。
+    那里仍然写着 "InterVariable"：留着它是为了这套字体名在自托管 Inter
+    之后能自动生效（见工具条那些按渲染位置量的断言）。要自托管就往
+    public/ 放 woff2 并在这里改成 @font-face，不要再走外链。
+  -->
 </head>
 <body>
   <div id="root"></div>

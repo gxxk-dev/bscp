@@ -10,7 +10,8 @@
 import {
   derive, freshBoard, freshScene, movedCount, moveRegion, replaceWith, scatter, withScreen,
 } from "./model";
-import type { Board, Scene } from "./model";
+import type { Board } from "./types";
+import type { Scene } from "./model";
 
 export type Step = { hint: string; build: () => Scene };
 export type Path = {

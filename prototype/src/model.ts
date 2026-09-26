@@ -11,29 +11,13 @@
    ——否则碎开会让它永远显示 6 块，或者（早先的写法）永远显示 0 块。
    两个数都不是人话，警告框就废了。 */
 import type { ReactNode } from "react";
+import { boxOf, cascade, collapse, fitInto } from "./geometry";
+import type { Board, Bounds, Region, Size } from "./types";
 
-export type Region = {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** 来源页码，投屏前给操作者认「这块是哪来的」 */
-  page: number;
-  /** 这块来自哪个投放的文件。多资源时角标才带得上信息 */
-  artifact?: string;
-  /** 语义单元 id，null = 不属于任何一组 */
-  unit: string | null;
-  title?: string;
-  opts?: string[];
-  bars?: string[];
-  figure?: boolean;
-  table?: string[][];
-  /** 真实投放进来的图片：块直接显示它，而不是示例内容 */
-  src?: string;
-  /** 由「继续切碎」派生出来的子块 */
-  child?: boolean;
-};
+/* Region / Board / View / Bounds / Crop / Size 已经搬去 types.ts：模型层不该
+   绑死 React（Dialog.body 以后要能渲染服务端返回的结构化载荷），而 Board 与
+   Region 是产品与 demo 共用的词汇表，不该住在 demo 侧这一份文件里。
+   本文件留下的是 fixture 与 #5–#10 的活。 */
 
 /* 每一屏叫什么。控件只认这个名字，不认别的——这让「这一屏在等什么」
    变成一处可查的清单，而不是散落在各处的 class 名。 */
@@ -46,29 +30,14 @@ export type Screen =
   | "operating" | "casting"
   | "zoom-out" | "zoom-in";
 
+/* 评审脚手架的类型。它的 body 是 ReactNode——正因如此它**不能**进
+   types.ts，那里的规矩是不许 import react。 */
 export type Dialog = {
   kind: "danger" | "info";
   title: string;
   body: ReactNode;
   cancel: string;
   confirm: string;
-};
-
-export type View = { x: number; y: number; k: number };
-
-export type Board = {
-  regions: Region[];
-  /** 操作者亲手拖过的块 id。碎开不写这里。 */
-  touched: string[];
-  /** 还没拍板的块 id（虚线） */
-  pending: string[];
-  selected: string | null;
-  /** 正在改框：那块显示四角手柄 */
-  editing: string | null;
-  /** 语义单元可见 */
-  groups: boolean;
-  /** 来源角标可见 */
-  badges: boolean;
 };
 
 export type Scene = {
@@ -78,8 +47,6 @@ export type Scene = {
   zoom: number | null;
   /** 这一屏要把内容铺满屏（只投一块出去时） */
   fill: boolean;
-  /** 用户自己平移/缩放过之后接管 centering，直到换屏 */
-  view: View | null;
   busy: boolean;
   dialog: Dialog | null;
   toast: string | null;
@@ -129,13 +96,13 @@ export function freshBoard(regions: Region[] = SAMPLE): Board {
 
 export function freshScene(): Scene {
   return {
-    screen: "empty", board: freshBoard(), zoom: null, fill: false, view: null,
+    screen: "empty", board: freshBoard(), zoom: null, fill: false,
     busy: false, dialog: null, toast: null,
   };
 }
 
 export function withScreen(s: Scene, screen: Screen, patch: Partial<Scene> = {}): Scene {
-  return { ...s, screen, ...patch, view: null };
+  return { ...s, screen, ...patch };
 }
 
 /* ---------- 碎开 ----------
@@ -277,7 +244,7 @@ export function judge(file: File): Verdict {
 
 /** 读图片的真实尺寸。丢进来就按原比例摆，不拉伸——拉伸过的图投出去
     字是糊的，而「分辨率」恰恰是这个产品明确不打算解决的问题。 */
-function probeImage(url: string): Promise<{ w: number; h: number }> {
+function probeImage(url: string): Promise<Size> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve({ w: img.naturalWidth || 1000, h: img.naturalHeight || 700 });
@@ -286,31 +253,12 @@ function probeImage(url: string): Promise<{ w: number; h: number }> {
   });
 }
 
-const SHEET = { w: 1000, h: 700 };          // PDF 还没栅格化时的占位尺寸
+const SHEET: Size = { w: 1000, h: 700 };   // PDF 还没栅格化时的占位尺寸
 
-/* ---------- 默认大小与摊开方式 ----------
-   这两个参数一起决定「丢进来之后屏幕上是什么样」，不是审美偏好：1440×900
-   的屏上并排放三份 1000×700 的纸，第一份占掉七成宽，第二、三份整个在
-   屏外。操作者看到的是一张纸加一句「已投放 3 份」——那份回执是真的，
-   屏上却没东西。 */
-
-/** 一份资源默认最多占视野的多大一块。等比缩，字不会被拉变形。 */
-const SHARE = { w: 0.42, h: 0.6 };
-
-/** 相邻两份错开的步长（相对第一份的短边），封在 28–72px。
-    太小看不出是两份，太大后面几份就甩出屏外。 */
-const STEP_SHARE = 0.14, STEP_MIN = 28, STEP_MAX = 72;
-
-export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
-
-/** 默认大小：等比缩到视野的一个份额以内，**不放大**。
-    不放大是因为插值出来的字是糊的，而这份资料等下还要投到大屏上看——
-    为了摆得好看先放大，等于提前毁掉它。 */
-function fitInto(b: Bounds | undefined, w: number, h: number) {
-  if (!b) return { w, h };
-  const k = Math.min(1, ((b.maxX - b.minX) * SHARE.w) / w, ((b.maxY - b.minY) * SHARE.h) / h);
-  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
-}
+/* ---------- 摆放 ----------
+   尺寸怎么收、几份怎么摊开、丢在边缘怎么收拢，全部搬去了 geometry.ts。
+   那边是唯一一份实现，产品侧的 placeRegions() 会直接调同一批函数——
+   同一个属性两套真相，正是画布早期注释里点名过的病。 */
 
 export type Ingested = { regions: Region[]; rejected: string[]; bytes: number };
 
@@ -330,7 +278,7 @@ export async function ingestFiles(
   anchor: { x: number; y: number },
   bounds?: Bounds,
 ): Promise<Ingested> {
-  const kept: { name: string; size: { w: number; h: number }; url?: string }[] = [];
+  const kept: { name: string; size: Size; url?: string }[] = [];
   const rejected: string[] = [];
   let bytes = 0;
 
@@ -348,24 +296,14 @@ export async function ingestFiles(
     bytes += file.size;
   }
 
-  const n = kept.length;
-  const first = kept[0]?.size;
-  const step = first
-    ? Math.min(STEP_MAX, Math.max(STEP_MIN, Math.round(Math.min(first.w, first.h) * STEP_SHARE)))
-    : 0;
+  const step = cascade(kept[0]?.size);
+  /* 整叠收拢：出屏了整叠一起退回来，只动新内容。 */
+  const { dx, dy } = collapse(kept.map((k) => k.size), anchor, step, bounds);
 
-  /* 整叠收拢：最右/最下那块出屏了，整叠一起退回来。 */
-  let dx = 0, dy = 0;
-  if (bounds && n) {
-    const last = kept[n - 1]!.size;
-    const right = anchor.x + (n - 1) * step + last.w;
-    const bottom = anchor.y + (n - 1) * step + last.h;
-    if (right > bounds.maxX) dx = bounds.maxX - right;
-    if (anchor.x + dx < bounds.minX) dx = bounds.minX - anchor.x;
-    if (bottom > bounds.maxY) dy = bounds.maxY - bottom;
-    if (anchor.y + dy < bounds.minY) dy = bounds.minY - anchor.y;
-  }
-
+  /* 区域 id 这里是 `a${i+1}`，每次投放从头数——所以第二次投放就会撞出
+     第二个 a1（key 重复、React 静默复用块、`[data-id="a1"]` 选中两个）。
+     产品路径由服务端生成 `${artifactId}#${regionId}`；demo 的 32 屏冒烟
+     每屏只投放一次，撞不上，所以这一行暂时原样留着。 */
   const regions: Region[] = kept.map((k, i) => ({
     id: `a${i + 1}`,
     x: anchor.x + i * step + dx,
@@ -403,38 +341,5 @@ export function readyScene(regions: Region[], toast: string): Scene {
   return { ...freshScene(), screen: "ready", board: boardFor(regions), toast };
 }
 
-/* ---------- 内容包围盒 ---------- */
-export function boxOf(regions: Region[]) {
-  const xs = regions.map((r) => r.x), ys = regions.map((r) => r.y);
-  const x = Math.min(...xs), y = Math.min(...ys);
-  return {
-    x, y,
-    w: Math.max(...regions.map((r) => r.x + r.w)) - x,
-    h: Math.max(...regions.map((r) => r.y + r.h)) - y,
-  };
-}
-
-/** 按**这一屏真正画了哪些块**算包围盒——切碎后的子块不在 SAMPLE 里。
- *
- *  zoom 为 null = 适应画布，且**不超过 1:1**。整份资料原样摆开时放大没有
- *  意义，1:1 就是它的上限。
- *
- *  fill = 铺满。用于「只投一块出去」：那一块就该占满整块屏，字不用拉伸
- *  就清楚了。早先这里只有 zoom 一个参数，单块那屏被 1:1 夹住，演示出来
- *  恰恰是这条论点的反例——一小块内容孤零零待在屏幕中间。 */
-export function fitView(
-  regions: Region[],
-  vp: { w: number; h: number },
-  zoom: number | null,
-  fill = false,
-): View {
-  const b = boxOf(regions);
-  const pad = 96, padTop = 60;
-  const fit = Math.min((vp.w - pad * 2) / b.w, (vp.h - pad * 2 - padTop) / b.h);
-  const k = zoom ?? (fill ? fit : Math.min(1, Math.max(0.2, fit)));
-  return {
-    k,
-    x: (vp.w - b.w * k) / 2 - b.x * k,
-    y: (vp.h - b.h * k) / 2 - b.y * k,
-  };
-}
+/* boxOf 与 fitView 已经搬去 geometry.ts：它们既不碰 fixture 也不碰 DOM，
+   产品侧的取景与摆放要调的是同一批函数。 */
