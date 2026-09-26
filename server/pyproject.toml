@@ -1,0 +1,35 @@
+[project]
+name = "bscp-server"
+version = "0.1.0"
+description = "板上重排（bscp）服务端：投放一张图片并投出去"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pillow",
+    "python-multipart",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# `bscp/` 与 `tests/` 平级，不是 src 布局。用 pythonpath 而不是为它引一个构建后端：
+# 服务端是**整个仓库的**一个目录，不是一个要发到 PyPI 的包。
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008（函数默认值里调 `Depends`）是 FastAPI 的写法本身，不是 bug。
+ignore = ["B008"]
