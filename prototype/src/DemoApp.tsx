@@ -1,14 +1,20 @@
 /* ===========================================================================
-   应用外壳
+   评审脚手架：12 条行为路径的演示外壳。**不是**产品 UI。
    ===========================================================================
-   顶部那条是**评审用的脚手架**，不是被评审的产品 UI——所以投屏态它还在。
-   底部那条和绿色提示条是设计对象：投屏时必须一次消失干净。
-   每一屏都能用 URL 直接定位：?path=<key>&step=<从 0 起>。 */
+   顶部那条、PROTOTYPE 红标、?path=&step= 路由、demo() 假回执——一个都不搬进
+   产品路径。产品路径下这些东西天然不存在，比「投屏态记得把它们藏起来」
+   可靠。产品外壳是 ProductApp.tsx（§4 步骤 5 建），main.tsx 用 `?path=`
+   有没有来分流；在此之前这一份就是入口。
+
+   底部那条工具条与绿色提示条是**被评审的设计对象**，投屏时必须一次消失
+   干净。每一屏都能用 URL 直接定位：?path=<key>&step=<从 0 起>。 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import { Canvas } from "./Canvas";
+import { camera } from "./camera";
 import { ingestFiles, ingestToast, movedCount, readyScene } from "./model";
-import type { Board, Bounds, Scene, View } from "./model";
+import type { Scene } from "./model";
+import type { Board } from "./types";
 import { PATHS, PATH_KEYS } from "./paths";
 import { Glyph, IconButton, Icons, TextButton } from "./ui";
 
@@ -21,7 +27,7 @@ function readUrl(): { path: string; step: number } {
   return { path, step: Math.min(Math.max(0, Number(q.get("step") || 0)), p.steps.length - 1) };
 }
 
-export default function App() {
+export default function DemoApp() {
   const [where, setWhere] = useState(readUrl);
   const [scene, setScene] = useState<Scene>(() => build(where.path, where.step));
   const [fitNonce, setFitNonce] = useState(0);
@@ -73,29 +79,23 @@ export default function App() {
      一次可以投多份。混着投递时收下的照收、拒的照拒，但**必须一次说清**：
      静默丢掉拒收的那些，操作者会以为都在。 */
   const [over, setOver] = useState(false);
-  /* 当前视野。Canvas 报上来，投放时用来把光标位置换算成画布坐标。 */
-  const view = useRef<View>({ x: 0, y: 0, k: 1 });
   const shell = useRef<HTMLDivElement>(null);
 
-  /** 屏幕坐标 → 画布坐标。没有 at 时退回视野左上角（文件选择器没有光标）。 */
+  /** 屏幕坐标 → 画布坐标。没有 at 时退回视野左上角（文件选择器没有光标）。
+      视野与视口一起从共享的 camera store **同步**读：早先这里是
+      `view.current = {x:0,y:0,k:1}` 的常量，因为 Canvas 那条
+      `onViewChange` 上报链 App 从来没接过。于是 ±4px 锚点与边缘收拢
+      两条验收在原型里是靠「每次投放都从空画布起步」巧合成立的，
+      一旦先缩放再投放就偏。 */
   const anchorAt = (at?: { x: number; y: number }) => {
-    const v = view.current;
-    const r = shell.current?.getBoundingClientRect();
+    const { view, rect } = camera.snapshot();
+    const topLeft = { x: -view.x / view.k, y: -view.y / view.k };
     /* 还没挂上（第一帧就投）时没有收拢边界，落到视野左上角即可 */
-    if (!r) return { x: -v.x / v.k, y: -v.y / v.k, bounds: undefined };
-    if (!at) return { x: -v.x / v.k, y: -v.y / v.k, bounds: boundsOf(r, v) };
-    return {
-      x: (at.x - r.left - v.x) / v.k,
-      y: (at.y - r.top - v.y) / v.k,
-      bounds: boundsOf(r, v),
-    };
+    if (!rect) return { ...topLeft, bounds: undefined };
+    if (!at) return { ...topLeft, bounds: camera.bounds() };
+    const p = camera.toCanvas(at.x, at.y);
+    return { x: p.x, y: p.y, bounds: camera.bounds() };
   };
-  const boundsOf = (r: DOMRect, v: View): Bounds => ({
-    minX: -v.x / v.k,
-    minY: -v.y / v.k,
-    maxX: (r.width - v.x) / v.k,
-    maxY: (r.height - v.y) / v.k,
-  });
 
   const ingest = useCallback(async (files: FileList | null, at?: { x: number; y: number }) => {
     const list = [...(files ?? [])];
@@ -429,7 +429,7 @@ function Chrome(props: {
        在「唯一那个内层 wrapper」上——零对间距，等于没写；真正生效的是
        内层的 gap-x-0.5（2px）。一条 2px 间距的工具条，控件全糊在一起，
        分隔线两侧也是 2px，看着像「按钮没做完」。 */
-    <div id="chrome" className="fixed bottom-3.5 left-1/2 z-40 -translate-x-1/2">
+    <div id="chrome" className="fixed bottom-3.5 left-1/2 z-40 -translate-x-1/2 touch-manipulation">
       <div className="flex max-w-[min(96dvw,44rem)] items-center gap-x-3 overflow-x-auto
         rounded-(--radius) bg-white/90 p-(--padding) shadow-sm ring-1 ring-neutral-950/10
         backdrop-blur-sm dark:bg-neutral-900/90 dark:shadow-none dark:ring-white/10
