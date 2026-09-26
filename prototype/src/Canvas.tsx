@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { camera } from "./camera";
 import { fitView } from "./geometry";
+import { RegionImage } from "./RegionImage";
 import type { Board, Region, View } from "./types";
 import { SourceBadge, UnitTag } from "./ui";
 
@@ -28,8 +29,11 @@ export function Canvas(props: {
   fitNonce: number;
   interactive: boolean;
   onBoard: (b: Board) => void;
+  /** 某一块的位图**真的到位**了（重试成功也算）。产品路径用它把那一块
+      从「还没到位」里划掉；demo 路径不传——原型没有「投屏等位图」这回事。 */
+  onRegionSettled?: (id: string) => void;
 }) {
-  const { board, zoom, fill, fitNonce, interactive, onBoard } = props;
+  const { board, zoom, fill, fitNonce, interactive, onBoard, onRegionSettled } = props;
   const vp = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   /** 取当前两指的坐标；不足两指返回 null */
@@ -271,6 +275,7 @@ export function Canvas(props: {
             badged={board.badges}
             handles={board.editing === r.id}
             lifted={lift.includes(r.id)}
+            onSettled={onRegionSettled}
           />
         ))}
       </div>
@@ -286,8 +291,9 @@ function RegionBox(props: {
   badged: boolean;
   handles: boolean;
   lifted: boolean;
+  onSettled?: (id: string) => void;
 }) {
-  const { r, selected, pending, grouped, badged, handles, lifted } = props;
+  const { r, selected, pending, grouped, badged, handles, lifted, onSettled } = props;
   /* general.md：同一属性不能挂两套互相覆盖的类。同一块若同时「未拍板」
      和「在某组里」，只画一层虚线，用颜色区分两种含义。 */
   const outline = grouped
@@ -310,8 +316,8 @@ function RegionBox(props: {
             裁切框就是它的全部内容；四周再留 12px 内边距等于在告诉评审者
             「这一块还有一部分没投出来」，而实际上没有。文字与表格分支
             仍然留 p-3——那些是示例排版，内边距是它们的一部分。 */}
-        {r.src
-          ? <img src={r.src} alt="" className="size-full" draggable={false} />
+        {r.src || r.bitmapPath
+          ? <RegionImage r={r} onSettled={onSettled} />
           : <div className="h-full p-3">{body(r)}</div>}
       </div>
       {handles &&

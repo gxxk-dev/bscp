@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  /* custom-fonts.md：正文/UI 字体注册为 --font-sans；Inter 由 <link> 载入 */
+  /* custom-fonts.md：正文/UI 字体注册为 --font-sans。Inter 那两条 <link>
+     已经删掉了（见 index.html 里的理由：目标环境没外网），所以下面第一个
+     真正命中的是 ui-sans-serif / system-ui / Noto Sans SC。
+     "InterVariable" 仍然留着，是为了将来自托管 Inter 之后能自动生效。 */
   --font-sans: "InterVariable", "Inter", ui-sans-serif, system-ui,
                "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "ss03";

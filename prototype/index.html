@@ -2,7 +2,12 @@
 <html lang="zh-CN" class="antialiased">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- `maximum-scale=1, user-scalable=no` 不可省：画布已经把双指缩放接管成
+       拖画布/缩放/平移（Canvas 的 `touch-none`），而浏览器的页面级捏合缩放
+       会在同一次双指手势里跟它抢——两套缩放同时生效，画面往哪个方向缩全看
+       谁先拿到手。一体机是 Windows Chrome/Edge，这两条 meta 在那上面都
+       生效。工具条另配 touch-manipulation（见 ProductApp 的 #chrome）。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>prototype · 行为路径演示 · bscp</title>
   <!--
     ============================================================================
